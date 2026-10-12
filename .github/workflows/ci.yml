@@ -41,12 +41,17 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/maintenance_rls.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/firebase_migration_setup.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610110002_firebase_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610120001_vehicle_maintenance_consistency.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/firebase_provisioning.sql
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-provisioning-concurrency.mjs
           psql -v ON_ERROR_STOP=1 -f supabase/tests/firebase_rls.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_maintenance_consistency.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-maintenance-consistency-concurrency.mjs
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      TZ: Europe/Lisbon
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

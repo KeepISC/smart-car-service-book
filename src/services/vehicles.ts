@@ -2,6 +2,10 @@ import { client } from './supabase'
 import type { Vehicle, VehicleInput } from '../types/vehicle'
 import { validateVehicle } from './validation'
 import { authService } from './auth'
+import {
+  isMileageConsistencyViolation,
+  MileageConsistencyError,
+} from './dataErrors'
 export async function listVehicles(): Promise<Vehicle[]> {
   const { data, error } = await client()
     .from('vehicles')
@@ -40,10 +44,18 @@ export async function saveVehicle(input: VehicleInput, id?: string) {
     ? db.from('vehicles').update(payload).eq('id', id)
     : db.from('vehicles').insert({ ...payload, owner_id: user.id })
   const { data, error } = await query.select().single()
+  if (error && isMileageConsistencyViolation(error))
+    throw new MileageConsistencyError()
   if (error) throw error
   return data as Vehicle
 }
 export async function deleteVehicle(id: string) {
-  const { error } = await client().from('vehicles').delete().eq('id', id)
+  const { data, error } = await client()
+    .from('vehicles')
+    .delete()
+    .eq('id', id)
+    .select('id')
   if (error) throw error
+  if (!data?.length)
+    throw new Error('This vehicle is unavailable or you do not have access.')
 }

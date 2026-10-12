@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     query,
     update: vi.fn().mockReturnValue(query),
     insert: vi.fn().mockReturnValue(query),
+    delete: vi.fn().mockReturnValue(query),
     getUser: vi.fn(),
   }
 })
@@ -16,10 +17,14 @@ vi.mock('./supabase', () => ({
   configured: true,
   client: () => ({
     auth: { getUser: mocks.getUser },
-    from: () => ({ update: mocks.update, insert: mocks.insert }),
+    from: () => ({
+      update: mocks.update,
+      insert: mocks.insert,
+      delete: mocks.delete,
+    }),
   }),
 }))
-import { saveVehicle } from './vehicles'
+import { saveVehicle, deleteVehicle } from './vehicles'
 vi.mock('./auth', () => ({
   authService: {
     getUser: async () => {
@@ -41,6 +46,7 @@ const input: VehicleInput = {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.query.select.mockReturnValue(mocks.query)
   mocks.getUser.mockResolvedValue({
     data: { user: { id: 'test-owner' } },
     error: null,
@@ -89,4 +95,43 @@ it('propagates a failed database operation', async () => {
     error: new Error('Database unavailable'),
   })
   await expect(saveVehicle(input)).rejects.toThrow('Database unavailable')
+})
+it('maps the database odometer guard to a clear validation error', async () => {
+  mocks.query.single.mockResolvedValue({
+    data: null,
+    error: {
+      code: '23514',
+      message: 'Vehicle mileage is below a recorded maintenance completion',
+    },
+  })
+  await expect(
+    saveVehicle({ ...input, mileage: 10000 }, 'test-vehicle'),
+  ).rejects.toThrow('highest recorded maintenance')
+})
+it('deletes only when the database returns an accessible deleted row', async () => {
+  mocks.query.select.mockResolvedValue({
+    data: [{ id: 'test-vehicle' }],
+    error: null,
+  })
+  await expect(deleteVehicle('test-vehicle')).resolves.toBeUndefined()
+  expect(mocks.query.eq).toHaveBeenCalledWith('id', 'test-vehicle')
+  expect(mocks.query.select).toHaveBeenCalledWith('id')
+})
+it.each([[], null])(
+  'does not report successful deletion for missing or RLS-hidden rows',
+  async (data) => {
+    mocks.query.select.mockResolvedValue({ data, error: null })
+    await expect(deleteVehicle('unavailable-vehicle')).rejects.toThrow(
+      'unavailable or you do not have access',
+    )
+  },
+)
+it('propagates deletion failures', async () => {
+  mocks.query.select.mockResolvedValue({
+    data: null,
+    error: new Error('Fictional network failure'),
+  })
+  await expect(deleteVehicle('test-vehicle')).rejects.toThrow(
+    'Fictional network failure',
+  )
 })

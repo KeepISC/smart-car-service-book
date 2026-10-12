@@ -1,5 +1,9 @@
 import { client } from './supabase'
 import { validateMaintenance } from './maintenanceLogic'
+import {
+  isMileageConsistencyViolation,
+  MileageConsistencyError,
+} from './dataErrors'
 import type {
   MaintenanceInput,
   MaintenanceItem,
@@ -66,6 +70,8 @@ export async function saveMaintenance(
         .from('vehicle_maintenance_items')
         .insert(payloads.map((item) => ({ ...item, vehicle_id: vehicle.id })))
   const { data, error } = await query.select()
+  if (error && isMileageConsistencyViolation(error))
+    throw new MileageConsistencyError()
   if (error) throw error
   if (!data?.length)
     throw new Error('No authorized maintenance items were saved.')

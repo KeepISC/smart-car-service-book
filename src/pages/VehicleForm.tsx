@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CarFront, Bike, Check } from 'lucide-react'
 import { getVehicle, saveVehicle } from '../services/vehicles'
@@ -6,6 +6,7 @@ import { validateVehicle } from '../services/validation'
 import { authService } from '../services/auth'
 import { ErrorState, Loading } from '../components/States'
 import type { VehicleInput } from '../types/vehicle'
+import { MileageConsistencyError } from '../services/dataErrors'
 const initial: VehicleInput = {
   type: 'car',
   make: '',
@@ -18,6 +19,11 @@ const initial: VehicleInput = {
 }
 export function VehicleForm() {
   const { id } = useParams()
+  // A route change discards all draft/loading/error state before the new fetch begins.
+  return <VehicleFormView key={id ?? 'new'} />
+}
+function VehicleFormView() {
+  const { id } = useParams()
   const navigate = useNavigate()
   const [value, setValue] = useState(initial)
   const [loading, setLoading] = useState(Boolean(id))
@@ -25,8 +31,10 @@ export function VehicleForm() {
   const [error, setError] = useState('')
   const [loadFailed, setLoadFailed] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const active = useRef(true)
   useEffect(() => {
     let alive = true
+    active.current = true
     if (id)
       getVehicle(id)
         .then((v) => {
@@ -43,10 +51,12 @@ export function VehicleForm() {
         })
     return () => {
       alive = false
+      active.current = false
     }
   }, [id])
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (loading || busy || loadFailed) return
     const normalized = {
       ...value,
       make: value.make.trim(),
@@ -62,13 +72,19 @@ export function VehicleForm() {
     setError('')
     try {
       const saved = await saveVehicle(normalized, id)
-      navigate(`/vehicles/${saved.id}${id ? '' : '?tab=maintenance'}`)
-    } catch {
+      if (active.current)
+        navigate(`/vehicles/${saved.id}${id ? '' : '?tab=maintenance'}`)
+    } catch (failure) {
+      if (!active.current) return
+      if (failure instanceof MileageConsistencyError) {
+        setErrors({ mileage: failure.message })
+        return
+      }
       setError(
         'Unable to save your vehicle. Check your connection and try again.',
       )
     } finally {
-      setBusy(false)
+      if (active.current) setBusy(false)
     }
   }
   if (loading) return <Loading />
@@ -145,8 +161,9 @@ export function VehicleForm() {
             ] as const
           ).map((field) => (
             <label key={field.key}>
-              {field.label}
+              <span id={`${field.key}-label`}>{field.label}</span>
               <input
+                aria-labelledby={`${field.key}-label`}
                 type={'number' in field ? 'number' : 'text'}
                 value={value[field.key] ?? ''}
                 placeholder={

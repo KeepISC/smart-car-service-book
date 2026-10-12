@@ -72,3 +72,15 @@ it('rejects invalid intervals before writing', async () => {
   ).rejects.toThrow('Review')
   expect(mock.insert).not.toHaveBeenCalled()
 })
+it('explains a database mileage rejection when the vehicle changed after loading', async () => {
+  mock.query.select.mockResolvedValue({
+    data: null,
+    error: {
+      code: '23514',
+      message: 'Maintenance completion exceeds current vehicle mileage',
+    },
+  })
+  await expect(saveMaintenance(vehicle, [starterSchedule[0]])).rejects.toThrow(
+    'highest recorded maintenance',
+  )
+})

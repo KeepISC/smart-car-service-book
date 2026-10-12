@@ -13,11 +13,12 @@ import {
 } from '../services/maintenance'
 import {
   calculateMaintenance,
-  dateOnly,
   starterSchedule,
   validateMaintenance,
 } from '../services/maintenanceLogic'
 import { ErrorState, Loading } from './States'
+import { useLocalDate } from '../hooks/useLocalDate'
+import { MileageConsistencyError } from '../services/dataErrors'
 
 const blank: MaintenanceInput = {
   name: '',
@@ -32,10 +33,12 @@ function Fields({
   value,
   change,
   mileage,
+  today,
 }: {
   value: MaintenanceInput
   change: (value: MaintenanceInput) => void
   mileage: number
+  today: string
 }) {
   return (
     <div className="form-grid">
@@ -91,7 +94,7 @@ function Fields({
             Last completed date (optional)
             <input
               type="date"
-              max={dateOnly()}
+              max={today}
               value={value.last_completed_date ?? ''}
               onChange={(e) =>
                 change({
@@ -139,6 +142,7 @@ function dateLabel(value: string) {
   })
 }
 export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
+  const today = useLocalDate()
   const [items, setItems] = useState<MaintenanceItem[]>([])
   const [templates, setTemplates] = useState<MaintenanceTemplate[]>([])
   const [loading, setLoading] = useState(true)
@@ -198,7 +202,7 @@ export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
   }
   async function save(values: MaintenanceInput[], id?: string) {
     const errors = values.flatMap((item) =>
-      validateMaintenance(item, vehicle.mileage).map(
+      validateMaintenance(item, vehicle.mileage, today).map(
         (message) => `${item.name || 'Operation'}: ${message}`,
       ),
     )
@@ -220,9 +224,11 @@ export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
           : [...previous, ...saved],
       )
       setDrafts(null)
-    } catch {
+    } catch (failure) {
       setError(
-        'Unable to save maintenance. Check your connection and permissions, then try again.',
+        failure instanceof MileageConsistencyError
+          ? failure.message
+          : 'Unable to save maintenance. Check your connection and permissions, then try again.',
       )
     } finally {
       setBusy(false)
@@ -369,6 +375,7 @@ export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
                 <Fields
                   value={draft}
                   mileage={vehicle.mileage}
+                  today={today}
                   change={(value) =>
                     setDrafts(
                       drafts.map((item, i) => (i === index ? value : item)),
@@ -422,7 +429,7 @@ export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
       )}
       <div className="maintenance-list">
         {items.map((item) => {
-          const result = calculateMaintenance(item, vehicle.mileage)
+          const result = calculateMaintenance(item, vehicle.mileage, today)
           const tone =
             result.status === 'Due / overdue'
               ? 'due'

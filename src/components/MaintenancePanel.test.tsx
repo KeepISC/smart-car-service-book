@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { MaintenancePanel } from './MaintenancePanel'
 import type { Vehicle } from '../types/vehicle'
@@ -86,4 +86,36 @@ it('shows a recoverable setup error when migrations are unavailable', async () =
     'maintenance migration',
   )
   expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+})
+it('refreshes the due status at midnight without reloading database data', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 9, 12, 23, 59, 59))
+  api.loadMaintenance.mockResolvedValue({
+    templates: [],
+    items: [
+      {
+        id: 'fictional-midnight',
+        name: 'Fictional midnight operation',
+        enabled: true,
+        history_status: 'known',
+        interval_km: null,
+        interval_months: 1,
+        last_completed_date: '2026-09-13',
+        last_completed_mileage: null,
+      },
+    ],
+  })
+  const view = render(<MaintenancePanel vehicle={vehicle} />)
+  try {
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByText('Due soon')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(1000))
+    expect(screen.getByText('Due / overdue')).toBeInTheDocument()
+    expect(api.loadMaintenance).toHaveBeenCalledOnce()
+  } finally {
+    view.unmount()
+    vi.useRealTimers()
+  }
 })
