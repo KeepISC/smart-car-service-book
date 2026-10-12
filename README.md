@@ -81,3 +81,7 @@ Tests cover vehicle validation boundaries, accessible loading/error states, auth
 - `scripts`: local source secret scanning
 
 Deploy `dist/` after `npm run build`. Configure your host to rewrite application routes to `index.html` for React Router. Add the production hostname to Firebase authorized domains and review verification return URLs before testing login. This project has not been deployed, committed or pushed automatically.
+
+## MIT License
+
+Copyright (c) 2026 KeepISC. This project is licensed under the [MIT License](LICENSE).
