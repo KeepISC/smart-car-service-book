@@ -1,0 +1,58 @@
+{
+  "name": "smart-car-service-book",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:local": "vite --host localhost --port 5173 --strictPort",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "server:provisioning": "node --env-file-if-exists=server/.env.local server/index.mjs",
+    "check:provisioning": "node scripts/check-provisioning.mjs",
+    "format:check": "prettier --check .",
+    "scan:secrets": "node scripts/scan-secrets.mjs",
+    "format": "prettier --write .",
+    "security:preflight": "node scripts/security-preflight.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "firebase": "12.19.0",
+    "firebase-admin": "^14.5.0",
+    "lucide-react": "^1.55.0",
+    "pg": "^8.23.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "globals": "^17.13.0",
+    "jsdom": "^27.4.0",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "^1.14.6"
+  }
+}
