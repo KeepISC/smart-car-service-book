@@ -1,4 +1,8 @@
 import { client } from './supabase'
+import {
+  maintenanceRevision,
+  notifyMaintenanceChange,
+} from './maintenanceChanges'
 import { loadServiceHistory } from './serviceHistory'
 import { isServiceHistoryEnabled } from '../config/features'
 import {
@@ -57,6 +61,11 @@ export async function loadVehicleMaintenance(
     : []
   return applyServiceHistory((items.data ?? []) as MaintenanceItem[], history)
 }
+let inFlightSummary: {
+  key: string
+  promise: Promise<MaintenanceAlertSummary>
+} | null = null
+
 export async function loadGarageMaintenanceSummary(
   vehicles: Vehicle[],
   today = dateOnly(),
@@ -64,15 +73,34 @@ export async function loadGarageMaintenanceSummary(
   if (!vehicles.length) {
     return { overdue: 0, dueSoon: 0, alerts: [] }
   }
-  const results = await Promise.all(
-    vehicles.map(async (vehicle) => {
-      const items = await loadVehicleMaintenance(vehicle)
-      return { vehicle, items }
-    }),
-  )
-  const summary = aggregateMaintenanceAlerts(results, today)
-  const alerts = getMaintenanceAlertDetails(results, today)
-  return { ...summary, alerts }
+  const key = `${maintenanceRevision()}:${today}:${vehicles
+    .map((v) => JSON.stringify(v))
+    .sort()
+    .join(';')}`
+  if (inFlightSummary && inFlightSummary.key === key) {
+    return inFlightSummary.promise
+  }
+
+  const promise = (async () => {
+    try {
+      const results = await Promise.all(
+        vehicles.map(async (vehicle) => {
+          const items = await loadVehicleMaintenance(vehicle)
+          return { vehicle, items }
+        }),
+      )
+      const summary = aggregateMaintenanceAlerts(results, today)
+      const alerts = getMaintenanceAlertDetails(results, today)
+      return { ...summary, alerts }
+    } finally {
+      if (inFlightSummary?.key === key) {
+        inFlightSummary = null
+      }
+    }
+  })()
+
+  inFlightSummary = { key, promise }
+  return promise
 }
 export async function loadMaintenance(vehicle: Vehicle) {
   const db = client()
@@ -130,6 +158,7 @@ export async function saveMaintenance(
   if (error) throw error
   if (!data?.length)
     throw new Error('No authorized maintenance items were saved.')
+  notifyMaintenanceChange()
   return data as MaintenanceItem[]
 }
 export async function removeMaintenance(vehicleId: string, id: string) {
@@ -141,4 +170,5 @@ export async function removeMaintenance(vehicleId: string, id: string) {
     .select('id')
   if (error) throw error
   if (!data?.length) throw new Error('The maintenance item is unavailable.')
+  notifyMaintenanceChange()
 }

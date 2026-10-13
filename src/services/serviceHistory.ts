@@ -1,4 +1,5 @@
 import { client } from './supabase'
+import { notifyMaintenanceChange } from './maintenanceChanges'
 import { validateServiceVisit } from './serviceHistoryLogic'
 import { dateOnly } from './maintenanceLogic'
 import type { ServiceVisit, ServiceVisitInput } from '../types/serviceHistory'
@@ -60,6 +61,7 @@ export async function saveServiceVisit(
   if (error) throw error
   if (typeof data !== 'string' || !data)
     throw new Error('The service visit was not saved. Please try again.')
+  notifyMaintenanceChange()
   return data
 }
 
@@ -70,4 +72,5 @@ export async function deleteServiceVisit(vehicleId: string, visitId: string) {
     p_visit_id: visitId,
   })
   if (error) throw error
+  notifyMaintenanceChange()
 }

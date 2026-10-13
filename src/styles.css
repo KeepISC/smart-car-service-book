@@ -1548,3 +1548,315 @@ select:focus-visible {
     gap: 4px;
   }
 }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  position: relative;
+}
+.notification-center {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.notification-bell-button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  padding: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-width: 40px;
+  min-height: 40px;
+  position: relative;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+.notification-bell-button:hover,
+.notification-bell-button.active {
+  background: var(--soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.notification-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 9px;
+  background: #ad263a;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  line-height: 1;
+  pointer-events: none;
+}
+.dark .notification-badge {
+  background: #e0314b;
+  border-color: var(--surface);
+  color: #ffffff;
+}
+.notification-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  max-height: min(520px, calc(100dvh - 100px));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.12),
+    0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+  overflow: hidden;
+}
+.dark .notification-panel {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.6);
+}
+.notification-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.notification-panel-header h3 {
+  font-size: 15px;
+  font-weight: 650;
+  margin: 0;
+  color: var(--text);
+}
+.notification-panel-subtitle {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  display: block;
+}
+.notification-close-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+.notification-close-btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.notification-panel-body {
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.notification-status-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+.notification-status-state.error {
+  color: #ad263a;
+  flex-direction: column;
+  gap: 8px;
+}
+.dark .notification-status-state.error {
+  color: #ffb1b8;
+}
+.notification-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 28px 16px;
+  color: var(--muted);
+}
+.notification-empty svg {
+  color: #167148;
+}
+.dark .notification-empty svg {
+  color: #9be0b3;
+}
+.notification-empty strong {
+  color: var(--text);
+  font-size: 14px;
+}
+.notification-empty p {
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+  min-width: 0;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.notification-item:hover {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.notification-item.overdue {
+  border-left: 4px solid #ad263a;
+}
+.notification-item.soon {
+  border-left: 4px solid #d97706;
+}
+.dark .notification-item.overdue {
+  border-left-color: #ff8591;
+}
+.dark .notification-item.soon {
+  border-left-color: #fbbf24;
+}
+.notification-item-indicator {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.overdue .notification-item-indicator {
+  color: #ad263a;
+}
+.soon .notification-item-indicator {
+  color: #d97706;
+}
+.dark .overdue .notification-item-indicator {
+  color: #ff8591;
+}
+.dark .soon .notification-item-indicator {
+  color: #ffd875;
+}
+.notification-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.notification-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+.notification-item-vehicle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  overflow-wrap: anywhere;
+}
+.notification-item-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.notification-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 1px;
+  min-width: 0;
+}
+.notification-delta {
+  font-weight: 600;
+}
+.overdue .notification-delta {
+  color: #ad263a;
+}
+.soon .notification-delta {
+  color: #855400;
+}
+.dark .overdue .notification-delta {
+  color: #ff8591;
+}
+.dark .soon .notification-delta {
+  color: #ffd875;
+}
+.notification-item-arrow {
+  flex-shrink: 0;
+  color: var(--muted);
+  margin-top: 4px;
+  transition: color 0.15s;
+}
+.notification-item:hover .notification-item-arrow {
+  color: var(--accent);
+}
+@media (max-width: 480px) {
+  .notification-panel {
+    position: fixed;
+    top: 76px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 90px);
+    z-index: 100;
+  }
+}
+@media (max-width: 380px) {
+  .notification-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+  }
+}

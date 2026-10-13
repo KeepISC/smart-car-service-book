@@ -6,13 +6,23 @@ import {
   isMileageConsistencyViolation,
   MileageConsistencyError,
 } from './dataErrors'
+let inFlightVehicles: Promise<Vehicle[]> | null = null
+
 export async function listVehicles(): Promise<Vehicle[]> {
-  const { data, error } = await client()
-    .from('vehicles')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data ?? []
+  if (inFlightVehicles) return inFlightVehicles
+  inFlightVehicles = (async () => {
+    try {
+      const { data, error } = await client()
+        .from('vehicles')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as Vehicle[]
+    } finally {
+      inFlightVehicles = null
+    }
+  })()
+  return inFlightVehicles
 }
 export async function getVehicle(id: string): Promise<Vehicle> {
   const { data, error } = await client()

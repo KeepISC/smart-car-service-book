@@ -31,6 +31,20 @@ beforeEach(() => {
   })
 })
 afterEach(() => vi.unstubAllEnvs())
+it('notifies alerts only after successful maintenance mutations', async () => {
+  const listener = vi.fn()
+  window.addEventListener('app:maintenance-change', listener)
+  try {
+    await saveMaintenance(vehicle, [starterSchedule[0]])
+    await removeMaintenance(vehicle.id, 'fictional-item')
+    expect(listener).toHaveBeenCalledTimes(2)
+    mock.query.select.mockResolvedValue({ data: [], error: null })
+    await expect(removeMaintenance(vehicle.id, 'unavailable')).rejects.toThrow()
+    expect(listener).toHaveBeenCalledTimes(2)
+  } finally {
+    window.removeEventListener('app:maintenance-change', listener)
+  }
+})
 it('scopes edits to both the vehicle and maintenance item', async () => {
   await saveMaintenance(vehicle, [starterSchedule[0]], 'fictional-item')
   expect(mock.query.eq).toHaveBeenCalledWith('id', 'fictional-item')

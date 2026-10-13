@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import type { Vehicle } from '../types/vehicle'
 import type { MaintenanceAlertSummary as MaintenanceAlertSummaryType } from '../types/maintenance'
 import { loadGarageMaintenanceSummary } from '../services/maintenance'
 import { useLocalDate } from '../hooks/useLocalDate'
+import { useMaintenanceRefresh } from '../hooks/useMaintenanceRefresh'
 
 function dateLabel(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
@@ -40,35 +41,22 @@ export function MaintenanceAlertSummary({
   const [retrying, setRetrying] = useState(false)
   const [error, setError] = useState('')
 
-  const load = useCallback(async () => {
-    if (!vehicles.length) {
-      setSummary({ overdue: 0, dueSoon: 0, alerts: [] })
-      setError('')
-      return
-    }
-    setRetrying(true)
-    setError('')
-    try {
-      const data = await loadGarageMaintenanceSummary(vehicles, today)
-      setSummary(data)
-    } catch {
-      setError(
-        'We couldn’t load maintenance alerts. Check your connection and try again.',
-      )
-    } finally {
-      setRetrying(false)
-    }
-  }, [vehicles, today])
+  const { revision, reload: load } = useMaintenanceRefresh()
 
   useEffect(() => {
     if (vehiclesLoading || vehiclesError) return
-    if (!vehicles.length) {
-      return
-    }
     let alive = true
-    loadGarageMaintenanceSummary(vehicles, today)
+    Promise.resolve()
+      .then(() => {
+        if (!alive) return null
+        setError('')
+        setRetrying(true)
+        return vehicles.length
+          ? loadGarageMaintenanceSummary(vehicles, today)
+          : { overdue: 0, dueSoon: 0, alerts: [] }
+      })
       .then((data) => {
-        if (alive) setSummary(data)
+        if (alive && data) setSummary(data)
       })
       .catch(() => {
         if (alive) {
@@ -77,10 +65,13 @@ export function MaintenanceAlertSummary({
           )
         }
       })
+      .finally(() => {
+        if (alive) setRetrying(false)
+      })
     return () => {
       alive = false
     }
-  }, [vehicles, vehiclesLoading, vehiclesError, today])
+  }, [vehicles, vehiclesLoading, vehiclesError, today, revision])
 
   const loading =
     vehiclesLoading ||
@@ -336,44 +327,44 @@ export function MaintenanceAlertSummary({
               }
 
               return (
-                <Link
-                  key={`${alert.vehicleId}-${alert.id}`}
-                  to={`/vehicles/${alert.vehicleId}?tab=maintenance`}
-                  className={`alert-item-card ${isOverdue ? 'overdue' : 'soon'}`}
-                  role="listitem"
-                  aria-label={`View ${alert.operationName} for ${alert.vehicleName}`}
-                >
-                  <div className="alert-item-main">
-                    <div className="alert-item-header">
-                      <span className="alert-item-vehicle">
-                        {alert.vehicleName}
-                      </span>
-                      <span
-                        className={`maintenance-status ${isOverdue ? 'due' : 'soon'}`}
-                      >
-                        {alert.status}
-                      </span>
+                <div role="listitem" key={`${alert.vehicleId}-${alert.id}`}>
+                  <Link
+                    to={`/vehicles/${alert.vehicleId}?tab=maintenance`}
+                    className={`alert-item-card ${isOverdue ? 'overdue' : 'soon'}`}
+                    aria-label={`View ${alert.operationName} for ${alert.vehicleName}`}
+                  >
+                    <div className="alert-item-main">
+                      <div className="alert-item-header">
+                        <span className="alert-item-vehicle">
+                          {alert.vehicleName}
+                        </span>
+                        <span
+                          className={`maintenance-status ${isOverdue ? 'due' : 'soon'}`}
+                        >
+                          {alert.status}
+                        </span>
+                      </div>
+                      <h4 className="alert-item-operation">
+                        {alert.operationName}
+                      </h4>
+                      <div className="alert-item-meta">
+                        {dueInfo && (
+                          <span className="alert-due-target">{dueInfo}</span>
+                        )}
+                        {dueInfo && deltaLabel && (
+                          <span className="bullet">·</span>
+                        )}
+                        {deltaLabel && (
+                          <span className="alert-due-delta">{deltaLabel}</span>
+                        )}
+                      </div>
                     </div>
-                    <h4 className="alert-item-operation">
-                      {alert.operationName}
-                    </h4>
-                    <div className="alert-item-meta">
-                      {dueInfo && (
-                        <span className="alert-due-target">{dueInfo}</span>
-                      )}
-                      {dueInfo && deltaLabel && (
-                        <span className="bullet">·</span>
-                      )}
-                      {deltaLabel && (
-                        <span className="alert-due-delta">{deltaLabel}</span>
-                      )}
+                    <div className="alert-item-action">
+                      <span className="view-schedule-text">View schedule</span>
+                      <ArrowUpRight size={17} aria-hidden="true" />
                     </div>
-                  </div>
-                  <div className="alert-item-action">
-                    <span className="view-schedule-text">View schedule</span>
-                    <ArrowUpRight size={17} aria-hidden="true" />
-                  </div>
-                </Link>
+                  </Link>
+                </div>
               )
             })}
           </div>

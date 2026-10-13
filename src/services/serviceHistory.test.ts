@@ -61,6 +61,24 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
+it('notifies alerts after Service History saves and deletes, but not failures', async () => {
+  const listener = vi.fn()
+  window.addEventListener('app:maintenance-change', listener)
+  try {
+    await saveServiceVisit(vehicle, input)
+    await saveServiceVisit(vehicle, input, 'fictional-visit')
+    await deleteServiceVisit(vehicle.id, 'fictional-visit')
+    expect(listener).toHaveBeenCalledTimes(3)
+    mock.rpc.mockResolvedValueOnce({ data: null, error: new Error('Offline') })
+    await expect(
+      deleteServiceVisit(vehicle.id, 'fictional-visit'),
+    ).rejects.toThrow()
+    expect(listener).toHaveBeenCalledTimes(3)
+  } finally {
+    window.removeEventListener('app:maintenance-change', listener)
+  }
+})
+
 it('does not query or mutate Service History when its flag is disabled', async () => {
   vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')
   await expect(loadServiceHistory(vehicle.id)).rejects.toThrow('not enabled')

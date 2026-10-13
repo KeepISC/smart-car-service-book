@@ -7,6 +7,7 @@ vi.mock('./serviceHistory', () => ({
   loadServiceHistory: api.loadServiceHistory,
 }))
 import { loadGarageMaintenanceSummary, loadMaintenance } from './maintenance'
+import { notifyMaintenanceChange } from './maintenanceChanges'
 
 const vehicle = {
   id: 'fictional',
@@ -49,6 +50,17 @@ beforeEach(() => {
   )
 })
 afterEach(() => vi.unstubAllEnvs())
+
+it('shares concurrent summary requests but starts a fresh read after a mutation', async () => {
+  vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')
+  const first = loadGarageMaintenanceSummary([vehicle], '2026-10-13')
+  const shared = loadGarageMaintenanceSummary([vehicle], '2026-10-13')
+  expect(api.from).toHaveBeenCalledTimes(1)
+  notifyMaintenanceChange()
+  const refreshed = loadGarageMaintenanceSummary([vehicle], '2026-10-13')
+  expect(api.from).toHaveBeenCalledTimes(2)
+  await Promise.all([first, shared, refreshed])
+})
 
 it('loads legacy maintenance without touching Service History when disabled', async () => {
   vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')

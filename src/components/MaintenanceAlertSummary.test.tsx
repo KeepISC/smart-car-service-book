@@ -435,7 +435,7 @@ it('renders accessible navigation links pointing to the vehicle maintenance scre
     </MemoryRouter>,
   )
 
-  const alertLink = await screen.findByRole('listitem', {
+  const alertLink = await screen.findByRole('link', {
     name: 'View Engine oil and filter for 2021 Fictional Sedan',
   })
   expect(alertLink).toBeInTheDocument()

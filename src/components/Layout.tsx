@@ -7,6 +7,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react'
 import { useAuth } from './AuthProvider'
+import { NotificationCenter } from './NotificationCenter'
 export function Layout() {
   const { session } = useAuth()
   return (
@@ -55,10 +56,13 @@ export function Layout() {
             <CarFront size={23} /> Smart Car
           </Link>
           <span className="desktop-only">Personal vehicle workspace</span>
-          <Link className="button button-small" to="/vehicles/new">
-            <Plus size={17} />
-            Add vehicle
-          </Link>
+          <div className="topbar-actions">
+            <NotificationCenter />
+            <Link className="button button-small" to="/vehicles/new">
+              <Plus size={17} />
+              Add vehicle
+            </Link>
+          </div>
         </header>
         <main>
           <Outlet />
