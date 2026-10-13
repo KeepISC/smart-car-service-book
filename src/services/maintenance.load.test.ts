@@ -88,7 +88,7 @@ it('uses linked completions and overrides only after explicit activation', async
 
 it('loads garage maintenance summary without queries when vehicle list is empty', async () => {
   const summary = await loadGarageMaintenanceSummary([])
-  expect(summary).toEqual({ overdue: 0, dueSoon: 0 })
+  expect(summary).toEqual({ overdue: 0, dueSoon: 0, alerts: [] })
   expect(api.from).not.toHaveBeenCalled()
 })
 
@@ -104,6 +104,57 @@ it('aggregates garage maintenance summary across vehicles using loaded items', a
   // baseline with enabled: true has next mileage: 10000 + 10000 = 20000.
   // vehicle has mileage: 50000. 50000 >= 20000 -> overdue!
   const summary = await loadGarageMaintenanceSummary([vehicle])
-  expect(summary).toEqual({ overdue: 1, dueSoon: 0 })
+  expect(summary).toMatchObject({ overdue: 1, dueSoon: 0 })
+  expect(summary.alerts).toHaveLength(1)
+  expect(summary.alerts?.[0]).toMatchObject({
+    id: 'schedule',
+    vehicleId: 'fictional',
+    vehicleName: '2020 Fictional Example',
+    operationName: 'Fictional inspection',
+    status: 'Due / overdue',
+    dueMileage: 20000,
+    kmRemaining: -30000,
+  })
   expect(api.from).toHaveBeenCalledWith('vehicle_maintenance_items')
+})
+
+it('reflects Service History completions and overrides in garage alert summary', async () => {
+  vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'true')
+  api.from.mockImplementation((table) =>
+    query(
+      table === 'vehicle_maintenance_items'
+        ? [{ ...baseline, enabled: true }]
+        : [],
+    ),
+  )
+  api.loadServiceHistory.mockResolvedValue([
+    {
+      id: 'entry-recent',
+      vehicle_id: vehicle.id,
+      service_date: '2026-10-10',
+      mileage: 49500,
+      created_at: '2026-10-10T10:00:00Z',
+      operations: [
+        {
+          id: 'op-recent',
+          maintenance_item_id: baseline.id,
+          next_interval_km: 1000, // override: next due at 49500 + 1000 = 50500 km (due soon for mileage 50000)
+          next_interval_months: 12,
+          created_at: '2026-10-10T10:00:00Z',
+        },
+      ],
+    },
+  ])
+
+  // vehicle mileage is 50000. Due at 50500 km -> 500 km remaining (<= 1000 km -> Due soon!)
+  const summary = await loadGarageMaintenanceSummary([vehicle], '2026-10-11')
+  expect(summary.overdue).toBe(0)
+  expect(summary.dueSoon).toBe(1)
+  expect(summary.alerts).toHaveLength(1)
+  expect(summary.alerts?.[0]).toMatchObject({
+    operationName: 'Fictional inspection',
+    status: 'Due soon',
+    dueMileage: 50500,
+    kmRemaining: 500,
+  })
 })

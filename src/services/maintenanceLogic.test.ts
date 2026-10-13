@@ -6,6 +6,7 @@ import {
   validateMaintenance,
   starterSchedule,
   aggregateMaintenanceAlerts,
+  getMaintenanceAlertDetails,
 } from './maintenanceLogic'
 import type { MaintenanceInput, MaintenanceItem } from '../types/maintenance'
 import type { ServiceCompletionVisit } from './maintenanceLogic'
@@ -509,5 +510,220 @@ describe('aggregateMaintenanceAlerts', () => {
     )
 
     expect(summary).toEqual({ overdue: 1, dueSoon: 0 })
+  })
+})
+
+describe('getMaintenanceAlertDetails', () => {
+  const car = {
+    id: 'veh-car',
+    year: 2021,
+    make: 'Fictional',
+    model: 'Corolla',
+    mileage: 25000,
+  }
+
+  const bike = {
+    id: 'veh-bike',
+    year: 2022,
+    make: 'Fictional',
+    model: 'Ninja',
+    mileage: 12000,
+  }
+
+  it('returns an empty array when given no vehicles or items', () => {
+    expect(getMaintenanceAlertDetails([])).toEqual([])
+    expect(getMaintenanceAlertDetails([{ vehicle: car, items: [] }])).toEqual(
+      [],
+    )
+  })
+
+  it('excludes disabled, not applicable, unknown history and up-to-date operations', () => {
+    const disabledItem: MaintenanceInput = {
+      name: 'Disabled Op',
+      interval_km: 10000,
+      interval_months: 12,
+      enabled: false,
+      history_status: 'known',
+      last_completed_date: '2024-01-01',
+      last_completed_mileage: 10000,
+    }
+    const naItem: MaintenanceInput = {
+      name: 'NA Op',
+      interval_km: 10000,
+      interval_months: 12,
+      enabled: true,
+      history_status: 'not_applicable',
+      last_completed_date: null,
+      last_completed_mileage: null,
+    }
+    const unknownItem: MaintenanceInput = {
+      name: 'Unknown Op',
+      interval_km: 10000,
+      interval_months: 12,
+      enabled: true,
+      history_status: 'unknown',
+      last_completed_date: null,
+      last_completed_mileage: null,
+    }
+    const upToDateItem: MaintenanceInput = {
+      name: 'Current Op',
+      interval_km: 20000,
+      interval_months: 24,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2026-01-01',
+      last_completed_mileage: 20000,
+    }
+
+    const alerts = getMaintenanceAlertDetails(
+      [
+        {
+          vehicle: car, // mileage 25000
+          items: [disabledItem, naItem, unknownItem, upToDateItem],
+        },
+      ],
+      '2026-06-01',
+    )
+
+    expect(alerts).toEqual([])
+  })
+
+  type TestAlertItemInput = MaintenanceInput & {
+    id?: string
+    next_interval_km?: number | null
+    next_interval_months?: number | null
+  }
+
+  it('lists overdue operations first followed by due-soon operations', () => {
+    const overdueMileage: TestAlertItemInput = {
+      id: 'item-overdue-km',
+      name: 'Oil change overdue',
+      interval_km: 10000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 10000, // due at 20000, vehicle has 25000 -> 5000 km overdue
+    }
+    const overdueDate: TestAlertItemInput = {
+      id: 'item-overdue-date',
+      name: 'Brake fluid overdue',
+      interval_km: null,
+      interval_months: 12,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-01-01', // due 2026-01-01, today is 2026-06-01 -> 5 months overdue
+      last_completed_mileage: null,
+    }
+    const dueSoonKm: TestAlertItemInput = {
+      id: 'item-soon-km',
+      name: 'Tire rotation soon',
+      interval_km: 10000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 15500, // due at 25500, vehicle has 25000 -> 500 km remaining (<=1000 km)
+    }
+    const dueSoonDate: TestAlertItemInput = {
+      id: 'item-soon-date',
+      name: 'Cabin filter soon',
+      interval_km: null,
+      interval_months: 12,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-06-15', // due 2026-06-15, today is 2026-06-01 -> 14 days remaining (<=30 days)
+      last_completed_mileage: null,
+    }
+
+    const alerts = getMaintenanceAlertDetails(
+      [
+        {
+          vehicle: car,
+          items: [dueSoonKm, overdueDate, dueSoonDate, overdueMileage],
+        },
+      ],
+      '2026-06-01',
+    )
+
+    expect(alerts.map((a) => a.status)).toEqual([
+      'Due / overdue',
+      'Due / overdue',
+      'Due soon',
+      'Due soon',
+    ])
+    expect(alerts[0].operationName).toBe('Brake fluid overdue')
+    expect(alerts[1].operationName).toBe('Oil change overdue')
+    expect(alerts[2].operationName).toBe('Cabin filter soon')
+    expect(alerts[3].operationName).toBe('Tire rotation soon')
+  })
+
+  it('aggregates alerts across multiple vehicles with formatted vehicle names', () => {
+    const carAlert: TestAlertItemInput = {
+      id: 'car-oil',
+      name: 'Engine oil',
+      interval_km: 10000,
+      interval_months: 12,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-01-01',
+      last_completed_mileage: 10000, // car mileage 25000 -> overdue!
+    }
+    const bikeAlert: TestAlertItemInput = {
+      id: 'bike-chain',
+      name: 'Drive chain',
+      interval_km: 5000,
+      interval_months: 6,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2026-05-01',
+      last_completed_mileage: 11500, // bike mileage 12000 -> due at 16500 (not due by km), but let's check date
+    }
+
+    const alerts = getMaintenanceAlertDetails(
+      [
+        { vehicle: car, items: [carAlert] },
+        { vehicle: bike, items: [bikeAlert] },
+      ],
+      '2026-06-01',
+    )
+
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0]).toMatchObject({
+      vehicleId: 'veh-car',
+      vehicleName: '2021 Fictional Corolla',
+      operationName: 'Engine oil',
+      status: 'Due / overdue',
+      dueMileage: 20000,
+      kmRemaining: -5000,
+    })
+  })
+
+  it('reflects Service History completions and interval overrides', () => {
+    const itemWithOverrides: TestAlertItemInput = {
+      id: 'gear-oil',
+      name: 'Differential fluid',
+      interval_km: 40000,
+      interval_months: 24,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2026-05-01',
+      last_completed_mileage: 24200,
+      next_interval_km: 1000, // one-time override: due at 24200 + 1000 = 25200 (car mileage 25000 -> 200 km remaining -> Due soon!)
+      next_interval_months: 1,
+    }
+
+    const alerts = getMaintenanceAlertDetails(
+      [{ vehicle: car, items: [itemWithOverrides] }],
+      '2026-05-15',
+    )
+
+    expect(alerts).toHaveLength(1)
+    expect(alerts[0]).toMatchObject({
+      operationName: 'Differential fluid',
+      status: 'Due soon',
+      dueMileage: 25200,
+      kmRemaining: 200,
+    })
   })
 })

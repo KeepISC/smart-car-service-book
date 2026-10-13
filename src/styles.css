@@ -1164,6 +1164,22 @@ select:focus-visible {
   color: var(--muted);
   background: var(--bg);
 }
+.dark .maintenance-status.current {
+  color: #9be0b3;
+  background: #163324;
+}
+.dark .maintenance-status.soon {
+  color: #ffd875;
+  background: #332712;
+}
+.dark .maintenance-status.due {
+  color: #ffb1b8;
+  background: #381c2a;
+}
+.dark .maintenance-status.unknown {
+  color: var(--muted);
+  background: var(--bg);
+}
 .maintenance-card .section-heading {
   gap: 12px;
   flex-wrap: wrap;
@@ -1368,5 +1384,167 @@ select:focus-visible {
   }
   .alert-stat strong {
     font-size: 32px;
+  }
+}
+.maintenance-alerts-detail {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.maintenance-alerts-detail-heading {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+  letter-spacing: -0.2px;
+}
+.maintenance-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alert-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 15px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  text-decoration: none;
+  min-height: 44px;
+  min-width: 0;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.alert-item-card.overdue {
+  border-left: 4px solid #ad263a;
+}
+.alert-item-card.soon {
+  border-left: 4px solid #d97706;
+}
+.dark .alert-item-card.overdue {
+  border-left-color: #ff8591;
+}
+.dark .alert-item-card.soon {
+  border-left-color: #fbbf24;
+}
+.alert-item-card:hover {
+  background: var(--surface);
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+.alert-item-card:hover.overdue {
+  border-left-color: #ad263a;
+}
+.alert-item-card:hover.soon {
+  border-left-color: #d97706;
+}
+.dark .alert-item-card:hover {
+  background: var(--soft);
+  border-color: var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.dark .alert-item-card:hover.overdue {
+  border-left-color: #ff8591;
+}
+.dark .alert-item-card:hover.soon {
+  border-left-color: #fbbf24;
+}
+.alert-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.alert-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.alert-item-vehicle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  overflow-wrap: anywhere;
+}
+.alert-item-operation {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+  margin: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.alert-item-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 1px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.alert-due-target {
+  color: var(--muted);
+}
+.alert-due-delta {
+  font-weight: 600;
+}
+.alert-item-card.overdue .alert-due-delta {
+  color: #ad263a;
+}
+.dark .alert-item-card.overdue .alert-due-delta {
+  color: #ff8591;
+}
+.alert-item-card.soon .alert-due-delta {
+  color: #855400;
+}
+.dark .alert-item-card.soon .alert-due-delta {
+  color: #ffd875;
+}
+.alert-item-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.alert-item-card:hover .alert-item-action {
+  text-decoration: underline;
+}
+@media (max-width: 480px) {
+  .view-schedule-text {
+    display: none;
+  }
+  .alert-item-card {
+    padding: 12px 13px;
+    gap: 10px;
+  }
+}
+@media (max-width: 380px) {
+  .alert-item-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }

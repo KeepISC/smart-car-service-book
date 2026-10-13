@@ -5,6 +5,7 @@ import {
   aggregateMaintenanceAlerts,
   applyServiceHistory,
   dateOnly,
+  getMaintenanceAlertDetails,
   validateMaintenance,
 } from './maintenanceLogic'
 import {
@@ -61,7 +62,7 @@ export async function loadGarageMaintenanceSummary(
   today = dateOnly(),
 ): Promise<MaintenanceAlertSummary> {
   if (!vehicles.length) {
-    return { overdue: 0, dueSoon: 0 }
+    return { overdue: 0, dueSoon: 0, alerts: [] }
   }
   const results = await Promise.all(
     vehicles.map(async (vehicle) => {
@@ -69,7 +70,9 @@ export async function loadGarageMaintenanceSummary(
       return { vehicle, items }
     }),
   )
-  return aggregateMaintenanceAlerts(results, today)
+  const summary = aggregateMaintenanceAlerts(results, today)
+  const alerts = getMaintenanceAlertDetails(results, today)
+  return { ...summary, alerts }
 }
 export async function loadMaintenance(vehicle: Vehicle) {
   const db = client()

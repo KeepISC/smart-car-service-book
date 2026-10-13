@@ -16,7 +16,7 @@ vi.mock('../components/ServiceHistoryPanel', () => ({
   ServiceHistoryPanel: () => <p>Fictional history</p>,
 }))
 vi.mock('../components/MaintenancePanel', () => ({
-  MaintenancePanel: () => null,
+  MaintenancePanel: () => <p>Fictional maintenance</p>,
 }))
 
 it('marks only Service history pressed when the history section is open', async () => {
@@ -60,4 +60,26 @@ it('does not render Service History or honor its deep link when disabled', async
     'aria-pressed',
     'true',
   )
+})
+
+it('opens the maintenance tab and marks Maintenance button pressed when navigating with ?tab=maintenance', async () => {
+  render(
+    <MemoryRouter initialEntries={['/vehicles/fictional?tab=maintenance']}>
+      <Routes>
+        <Route path="/vehicles/:id" element={<VehicleDetails />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  await screen.findByText('Fictional maintenance')
+  expect(screen.getByRole('button', { name: 'Maintenance' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  expect(screen.getByRole('button', { name: 'Overview' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  )
+  expect(
+    screen.queryByRole('heading', { name: 'Vehicle overview' }),
+  ).not.toBeInTheDocument()
 })

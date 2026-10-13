@@ -32,7 +32,19 @@ export type MaintenanceTemplate = {
   verified_at: string | null
   maintenance_template_items: MaintenanceInput[]
 }
+export type MaintenanceAlertItem = {
+  id: string
+  vehicleId: string
+  vehicleName: string
+  operationName: string
+  status: 'Due / overdue' | 'Due soon'
+  dueDate: string | null
+  dueMileage: number | null
+  kmRemaining: number | null
+  daysRemaining: number | null
+}
 export type MaintenanceAlertSummary = {
   overdue: number
   dueSoon: number
+  alerts?: MaintenanceAlertItem[]
 }

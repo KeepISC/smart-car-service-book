@@ -1,4 +1,5 @@
 import type {
+  MaintenanceAlertItem,
   MaintenanceAlertSummary,
   MaintenanceInput,
   MaintenanceItem,
@@ -258,4 +259,89 @@ export function aggregateMaintenanceAlerts(
     }
   }
   return { overdue, dueSoon }
+}
+export function getMaintenanceAlertDetails(
+  vehiclesWithItems: {
+    vehicle: {
+      id?: string
+      make?: string
+      model?: string
+      year?: number
+      mileage: number
+    }
+    items: (MaintenanceInput & {
+      id?: string
+      next_interval_km?: number | null
+      next_interval_months?: number | null
+    })[]
+  }[],
+  today = dateOnly(),
+): MaintenanceAlertItem[] {
+  const overdueItems: MaintenanceAlertItem[] = []
+  const dueSoonItems: MaintenanceAlertItem[] = []
+  const currentDate = parseDate(today)
+
+  for (const { vehicle, items } of vehiclesWithItems) {
+    const nameParts = [vehicle.year, vehicle.make, vehicle.model]
+      .filter((part) => part !== undefined && part !== null && part !== '')
+      .join(' ')
+    const vehicleName = nameParts || 'Vehicle'
+
+    for (const item of items) {
+      const result = calculateMaintenance(item, vehicle.mileage, today)
+      if (result.status === 'Due / overdue' || result.status === 'Due soon') {
+        const dueDate = result.nextDate ? parseDate(result.nextDate) : null
+        const daysRemaining =
+          currentDate && dueDate
+            ? Math.round((dueDate.getTime() - currentDate.getTime()) / 86400000)
+            : null
+        const kmRemaining =
+          result.nextMileage !== null
+            ? result.nextMileage - vehicle.mileage
+            : null
+
+        const alertItem: MaintenanceAlertItem = {
+          id: item.id ?? item.name,
+          vehicleId: vehicle.id ?? '',
+          vehicleName,
+          operationName: item.name,
+          status: result.status,
+          dueDate: result.nextDate,
+          dueMileage: result.nextMileage,
+          kmRemaining,
+          daysRemaining,
+        }
+
+        if (result.status === 'Due / overdue') {
+          overdueItems.push(alertItem)
+        } else {
+          dueSoonItems.push(alertItem)
+        }
+      }
+    }
+  }
+
+  const sortAlerts = (list: MaintenanceAlertItem[]) => {
+    list.sort((a, b) => {
+      if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) {
+        return a.dueDate.localeCompare(b.dueDate)
+      }
+      if (
+        a.kmRemaining !== null &&
+        b.kmRemaining !== null &&
+        a.kmRemaining !== b.kmRemaining
+      ) {
+        return a.kmRemaining - b.kmRemaining
+      }
+      if (a.vehicleName !== b.vehicleName) {
+        return a.vehicleName.localeCompare(b.vehicleName)
+      }
+      return a.operationName.localeCompare(b.operationName)
+    })
+  }
+
+  sortAlerts(overdueItems)
+  sortAlerts(dueSoonItems)
+
+  return [...overdueItems, ...dueSoonItems]
 }

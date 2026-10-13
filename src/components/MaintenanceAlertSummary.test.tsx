@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { MaintenanceAlertSummary } from './MaintenanceAlertSummary'
 import type { Vehicle } from '../types/vehicle'
@@ -303,4 +304,165 @@ it('reflects Service History completion changes in the counters', async () => {
       screen.getByLabelText('Overdue maintenance operations'),
     ).toHaveTextContent('00')
   })
+})
+
+it('renders detailed alert operations list with vehicle, operation, status and meta information', async () => {
+  mockSummary.loadGarageMaintenanceSummary.mockResolvedValueOnce({
+    overdue: 1,
+    dueSoon: 1,
+    alerts: [
+      {
+        id: 'op-oil',
+        vehicleId: 'car-1',
+        vehicleName: '2021 Fictional Sedan',
+        operationName: 'Engine oil and filter',
+        status: 'Due / overdue',
+        dueDate: '2026-10-01',
+        dueMileage: 24000,
+        kmRemaining: -1000,
+        daysRemaining: -12,
+      },
+      {
+        id: 'op-brakes',
+        vehicleId: 'bike-1',
+        vehicleName: '2022 Fictional Cruiser',
+        operationName: 'Brake fluid inspection',
+        status: 'Due soon',
+        dueDate: '2026-10-25',
+        dueMileage: 12500,
+        kmRemaining: 500,
+        daysRemaining: 12,
+      },
+    ],
+  })
+
+  render(
+    <MemoryRouter>
+      <MaintenanceAlertSummary
+        vehicles={[fictionalCar, fictionalBike]}
+        vehiclesLoading={false}
+      />
+    </MemoryRouter>,
+  )
+
+  expect(
+    await screen.findByText('Operations requiring attention'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('2021 Fictional Sedan')).toBeInTheDocument()
+  expect(screen.getByText('Engine oil and filter')).toBeInTheDocument()
+  expect(screen.getByText('2022 Fictional Cruiser')).toBeInTheDocument()
+  expect(screen.getByText('Brake fluid inspection')).toBeInTheDocument()
+
+  expect(
+    screen.getByText('1,000 km overdue · 12 days overdue'),
+  ).toBeInTheDocument()
+  expect(screen.getByText('Due in 500 km · Due in 12 days')).toBeInTheDocument()
+})
+
+it('preserves overdue before due-soon ordering in the rendered alert operations list', async () => {
+  mockSummary.loadGarageMaintenanceSummary.mockResolvedValueOnce({
+    overdue: 1,
+    dueSoon: 1,
+    alerts: [
+      {
+        id: 'op-overdue',
+        vehicleId: 'car-1',
+        vehicleName: '2021 Fictional Sedan',
+        operationName: 'Overdue Operation',
+        status: 'Due / overdue',
+        dueDate: '2026-10-01',
+        dueMileage: 24000,
+        kmRemaining: -1000,
+        daysRemaining: -12,
+      },
+      {
+        id: 'op-soon',
+        vehicleId: 'bike-1',
+        vehicleName: '2022 Fictional Cruiser',
+        operationName: 'Due Soon Operation',
+        status: 'Due soon',
+        dueDate: '2026-10-25',
+        dueMileage: 12500,
+        kmRemaining: 500,
+        daysRemaining: 12,
+      },
+    ],
+  })
+
+  render(
+    <MemoryRouter>
+      <MaintenanceAlertSummary
+        vehicles={[fictionalCar, fictionalBike]}
+        vehiclesLoading={false}
+      />
+    </MemoryRouter>,
+  )
+
+  await screen.findByText('Operations requiring attention')
+  const items = screen.getAllByRole('listitem')
+  expect(items).toHaveLength(2)
+  expect(items[0]).toHaveTextContent('Overdue Operation')
+  expect(items[0]).toHaveTextContent('Due / overdue')
+  expect(items[1]).toHaveTextContent('Due Soon Operation')
+  expect(items[1]).toHaveTextContent('Due soon')
+})
+
+it('renders accessible navigation links pointing to the vehicle maintenance screen', async () => {
+  mockSummary.loadGarageMaintenanceSummary.mockResolvedValueOnce({
+    overdue: 1,
+    dueSoon: 0,
+    alerts: [
+      {
+        id: 'op-oil',
+        vehicleId: 'car-1',
+        vehicleName: '2021 Fictional Sedan',
+        operationName: 'Engine oil and filter',
+        status: 'Due / overdue',
+        dueDate: '2026-10-01',
+        dueMileage: 24000,
+        kmRemaining: -1000,
+        daysRemaining: -12,
+      },
+    ],
+  })
+
+  render(
+    <MemoryRouter>
+      <MaintenanceAlertSummary
+        vehicles={[fictionalCar]}
+        vehiclesLoading={false}
+      />
+    </MemoryRouter>,
+  )
+
+  const alertLink = await screen.findByRole('listitem', {
+    name: 'View Engine oil and filter for 2021 Fictional Sedan',
+  })
+  expect(alertLink).toBeInTheDocument()
+  expect(alertLink).toHaveAttribute('href', '/vehicles/car-1?tab=maintenance')
+})
+
+it('omits the detailed alert list when all operations are up to date', async () => {
+  mockSummary.loadGarageMaintenanceSummary.mockResolvedValueOnce({
+    overdue: 0,
+    dueSoon: 0,
+    alerts: [],
+  })
+
+  render(
+    <MemoryRouter>
+      <MaintenanceAlertSummary
+        vehicles={[fictionalCar]}
+        vehiclesLoading={false}
+      />
+    </MemoryRouter>,
+  )
+
+  await screen.findByText(
+    'All scheduled maintenance across your vehicles is up to date.',
+  )
+  expect(
+    screen.queryByText('Operations requiring attention'),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByRole('list')).not.toBeInTheDocument()
 })

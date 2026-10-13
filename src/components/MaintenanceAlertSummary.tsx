@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowUpRight,
   CheckCircle2,
   Clock,
   LoaderCircle,
@@ -10,6 +12,14 @@ import type { Vehicle } from '../types/vehicle'
 import type { MaintenanceAlertSummary as MaintenanceAlertSummaryType } from '../types/maintenance'
 import { loadGarageMaintenanceSummary } from '../services/maintenance'
 import { useLocalDate } from '../hooks/useLocalDate'
+
+function dateLabel(value: string) {
+  return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 export function MaintenanceAlertSummary({
   vehicles,
@@ -32,7 +42,7 @@ export function MaintenanceAlertSummary({
 
   const load = useCallback(async () => {
     if (!vehicles.length) {
-      setSummary({ overdue: 0, dueSoon: 0 })
+      setSummary({ overdue: 0, dueSoon: 0, alerts: [] })
       setError('')
       return
     }
@@ -261,6 +271,112 @@ export function MaintenanceAlertSummary({
                 ? `${overdueCount} maintenance ${overdueCount === 1 ? 'operation is' : 'operations are'} overdue.`
                 : `${dueSoonCount} maintenance ${dueSoonCount === 1 ? 'operation is' : 'operations are'} due soon.`}
           </span>
+        </div>
+      )}
+      {Boolean(summary?.alerts?.length) && (
+        <div className="maintenance-alerts-detail">
+          <h3 className="maintenance-alerts-detail-heading">
+            Operations requiring attention
+          </h3>
+          <div
+            className="maintenance-alerts-list"
+            role="list"
+            aria-label="Maintenance alert operations"
+          >
+            {summary!.alerts!.map((alert) => {
+              const isOverdue = alert.status === 'Due / overdue'
+              const dueInfo = [
+                alert.dueDate ? dateLabel(alert.dueDate) : '',
+                alert.dueMileage !== null
+                  ? `${alert.dueMileage.toLocaleString()} km`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(' · ')
+
+              let deltaLabel: string
+              if (isOverdue) {
+                const overdueParts: string[] = []
+                if (alert.kmRemaining !== null && alert.kmRemaining <= 0) {
+                  overdueParts.push(
+                    `${Math.abs(alert.kmRemaining).toLocaleString()} km overdue`,
+                  )
+                }
+                if (alert.daysRemaining !== null && alert.daysRemaining <= 0) {
+                  overdueParts.push(
+                    alert.daysRemaining === 0
+                      ? 'Due today'
+                      : `${Math.abs(alert.daysRemaining)} ${Math.abs(alert.daysRemaining) === 1 ? 'day' : 'days'} overdue`,
+                  )
+                }
+                deltaLabel =
+                  overdueParts.length > 0 ? overdueParts.join(' · ') : 'Overdue'
+              } else {
+                const soonParts: string[] = []
+                if (
+                  alert.kmRemaining !== null &&
+                  alert.kmRemaining > 0 &&
+                  alert.kmRemaining <= 1000
+                ) {
+                  soonParts.push(
+                    `Due in ${alert.kmRemaining.toLocaleString()} km`,
+                  )
+                }
+                if (
+                  alert.daysRemaining !== null &&
+                  alert.daysRemaining > 0 &&
+                  alert.daysRemaining <= 30
+                ) {
+                  soonParts.push(
+                    `Due in ${alert.daysRemaining} ${alert.daysRemaining === 1 ? 'day' : 'days'}`,
+                  )
+                }
+                deltaLabel =
+                  soonParts.length > 0 ? soonParts.join(' · ') : 'Due soon'
+              }
+
+              return (
+                <Link
+                  key={`${alert.vehicleId}-${alert.id}`}
+                  to={`/vehicles/${alert.vehicleId}?tab=maintenance`}
+                  className={`alert-item-card ${isOverdue ? 'overdue' : 'soon'}`}
+                  role="listitem"
+                  aria-label={`View ${alert.operationName} for ${alert.vehicleName}`}
+                >
+                  <div className="alert-item-main">
+                    <div className="alert-item-header">
+                      <span className="alert-item-vehicle">
+                        {alert.vehicleName}
+                      </span>
+                      <span
+                        className={`maintenance-status ${isOverdue ? 'due' : 'soon'}`}
+                      >
+                        {alert.status}
+                      </span>
+                    </div>
+                    <h4 className="alert-item-operation">
+                      {alert.operationName}
+                    </h4>
+                    <div className="alert-item-meta">
+                      {dueInfo && (
+                        <span className="alert-due-target">{dueInfo}</span>
+                      )}
+                      {dueInfo && deltaLabel && (
+                        <span className="bullet">·</span>
+                      )}
+                      {deltaLabel && (
+                        <span className="alert-due-delta">{deltaLabel}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="alert-item-action">
+                    <span className="view-schedule-text">View schedule</span>
+                    <ArrowUpRight size={17} aria-hidden="true" />
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
         </div>
       )}
     </section>
