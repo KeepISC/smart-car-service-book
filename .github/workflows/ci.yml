@@ -57,6 +57,9 @@ jobs:
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-service-history-lock-order.mjs
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-service-history-legacy-concurrency.mjs
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-maintenance-consistency-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610130001_vehicle_mileage_history.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_mileage_history.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-vehicle-mileage-concurrency.mjs
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15

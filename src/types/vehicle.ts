@@ -23,3 +23,11 @@ export type VehicleInput = Pick<
   | 'license_plate'
   | 'vin'
 >
+
+export type VehicleMileageHistory = {
+  id: string
+  vehicle_id: string
+  recorded_at: string
+  mileage: number
+  source: 'manual'
+}

@@ -1,10 +1,16 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, CarFront, Bike, Trash2 } from 'lucide-react'
-import { getVehicle, deleteVehicle } from '../services/vehicles'
+import {
+  getVehicle,
+  deleteVehicle,
+  updateVehicleMileage,
+} from '../services/vehicles'
+import { MileageConsistencyError } from '../services/dataErrors'
 import { ErrorState, Loading } from '../components/States'
 import type { Vehicle } from '../types/vehicle'
 import { MaintenancePanel } from '../components/MaintenancePanel'
+import { MileageHistoryPanel } from '../components/MileageHistoryPanel'
 import { isServiceHistoryEnabled } from '../config/features'
 const ServiceHistoryPanel = lazy(async () => ({
   default: (await import('../components/ServiceHistoryPanel'))
@@ -27,6 +33,12 @@ function VehicleDetailsView() {
   const [error, setError] = useState('')
   const [confirm, setConfirm] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [editingMileage, setEditingMileage] = useState(false)
+  const [mileageInput, setMileageInput] = useState('')
+  const [mileageError, setMileageError] = useState('')
+  const [mileageSuccess, setMileageSuccess] = useState('')
+  const [savingMileage, setSavingMileage] = useState(false)
+  const [mileageHistoryKey, setMileageHistoryKey] = useState(0)
   useEffect(() => {
     let alive = true
     getVehicle(id!)
@@ -52,6 +64,62 @@ function VehicleDetailsView() {
     } catch {
       setError('Unable to delete the vehicle. Please try again.')
       setBusy(false)
+    }
+  }
+  function startEditingMileage() {
+    if (!vehicle) return
+    setMileageInput(String(vehicle.mileage))
+    setMileageError('')
+    setMileageSuccess('')
+    setEditingMileage(true)
+  }
+  function cancelEditingMileage() {
+    setEditingMileage(false)
+    setMileageInput('')
+    setMileageError('')
+  }
+  async function handleMileageSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!vehicle || savingMileage) return
+    const trimmed = mileageInput.trim()
+    if (!trimmed || !/^\d+$/.test(trimmed)) {
+      setMileageError('Enter a whole number between 0 and 10,000,000.')
+      return
+    }
+    const nextMileage = Number(trimmed)
+    if (
+      !Number.isInteger(nextMileage) ||
+      nextMileage < 0 ||
+      nextMileage > 10000000
+    ) {
+      setMileageError('Enter a whole number between 0 and 10,000,000.')
+      return
+    }
+    if (nextMileage < vehicle.mileage) {
+      setMileageError(
+        `Mileage cannot be decreased below the existing recorded ${vehicle.mileage.toLocaleString()} km.`,
+      )
+      return
+    }
+    setSavingMileage(true)
+    setMileageError('')
+    setMileageSuccess('')
+    try {
+      const updated = await updateVehicleMileage(vehicle, nextMileage)
+      setVehicle(updated)
+      setEditingMileage(false)
+      setMileageSuccess('Vehicle mileage updated successfully.')
+      setMileageHistoryKey((k) => k + 1)
+    } catch (err) {
+      if (err instanceof MileageConsistencyError) {
+        setMileageError(err.message)
+      } else if (err instanceof Error) {
+        setMileageError(err.message)
+      } else {
+        setMileageError('Unable to update vehicle mileage. Please try again.')
+      }
+    } finally {
+      setSavingMileage(false)
     }
   }
   if (loading) return <Loading />
@@ -123,12 +191,108 @@ function VehicleDetailsView() {
                 </div>
                 <section className="panel">
                   <h2>Vehicle overview</h2>
+                  {mileageSuccess && (
+                    <p className="service-feedback success" role="status">
+                      {mileageSuccess}
+                    </p>
+                  )}
                   <dl>
+                    <div
+                      className={`mileage-row${editingMileage ? ' editing' : ''}`}
+                    >
+                      <dt id="current-mileage-label">Current mileage</dt>
+                      <dd className="mileage-dd">
+                        {editingMileage ? (
+                          <form
+                            className="mileage-edit-form"
+                            onSubmit={handleMileageSubmit}
+                            noValidate
+                            aria-labelledby="current-mileage-label"
+                          >
+                            <div className="mileage-edit-controls">
+                              <div className="mileage-input-group">
+                                <input
+                                  id="vehicle-mileage-input"
+                                  type="number"
+                                  className="mileage-input"
+                                  value={mileageInput}
+                                  onChange={(e) => {
+                                    setMileageInput(e.target.value)
+                                    if (mileageError) setMileageError('')
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                      cancelEditingMileage()
+                                    }
+                                  }}
+                                  min={vehicle.mileage}
+                                  max={10000000}
+                                  step={1}
+                                  required
+                                  disabled={savingMileage}
+                                  aria-label="Current mileage in km"
+                                  aria-invalid={Boolean(mileageError)}
+                                  aria-describedby={
+                                    mileageError
+                                      ? 'mileage-input-error'
+                                      : undefined
+                                  }
+                                  autoFocus
+                                />
+                                <span
+                                  className="mileage-unit"
+                                  aria-hidden="true"
+                                >
+                                  km
+                                </span>
+                              </div>
+                              <div className="mileage-edit-actions">
+                                <button
+                                  type="button"
+                                  className="button secondary button-small"
+                                  onClick={cancelEditingMileage}
+                                  disabled={savingMileage}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  className="button button-small"
+                                  disabled={savingMileage}
+                                >
+                                  {savingMileage ? 'Saving…' : 'Save'}
+                                </button>
+                              </div>
+                            </div>
+                            {mileageError && (
+                              <small
+                                className="field-error"
+                                id="mileage-input-error"
+                                role="alert"
+                              >
+                                {mileageError}
+                              </small>
+                            )}
+                          </form>
+                        ) : (
+                          <div className="mileage-display">
+                            <span className="mileage-value">
+                              {vehicle.mileage.toLocaleString()} km
+                            </span>
+                            <button
+                              type="button"
+                              className="button secondary button-small mileage-edit-btn"
+                              onClick={startEditingMileage}
+                              aria-label="Edit current mileage"
+                            >
+                              <Pencil size={14} aria-hidden="true" />
+                              Edit
+                            </button>
+                          </div>
+                        )}
+                      </dd>
+                    </div>
                     {[
-                      [
-                        'Current mileage',
-                        `${vehicle.mileage.toLocaleString()} km`,
-                      ],
                       ['Year', vehicle.year],
                       ['Engine / version', vehicle.engine],
                       ['License plate', vehicle.license_plate || 'Not added'],
@@ -142,6 +306,10 @@ function VehicleDetailsView() {
                   </dl>
                 </section>
               </div>
+              <MileageHistoryPanel
+                vehicleId={vehicle.id}
+                refreshTrigger={mileageHistoryKey}
+              />
               <section className="panel danger-zone">
                 <h2>Remove vehicle</h2>
                 <p className="muted">

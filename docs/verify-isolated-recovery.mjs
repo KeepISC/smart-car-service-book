@@ -4,17 +4,48 @@ import { readFile, mkdtemp, rm, access } from 'node:fs/promises'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import net from 'node:net'
+import { isDeepStrictEqual } from 'node:util'
 import pg from 'pg'
-import EmbeddedPostgres from '../.tmp/postgres-tools/node_modules/embedded-postgres/dist/index.js'
+const major = process.env.SCSB_RECOVERY_POSTGRES_MAJOR ?? '18'
+assert.ok(
+  ['17', '18'].includes(major),
+  'Unsupported disposable PostgreSQL version',
+)
+const { default: EmbeddedPostgres } = await import(
+  major === '17'
+    ? '../.tmp/postgres17-tools/node_modules/embedded-postgres/dist/index.js'
+    : '../.tmp/postgres-tools/node_modules/embedded-postgres/dist/index.js'
+)
 
 // This tool creates its own server. It accepts no database connection settings.
+const manifestPath = process.env.SCSB_RECOVERY_MANIFEST
+const manifest = manifestPath
+  ? JSON.parse(await readFile(manifestPath, 'utf8'))
+  : null
 const expectedHash =
+  manifest?.sha256 ??
   '855e575ce4d184e9a3c70ef2d759c76521dcccf08917ad73233f46d5917bff42'
 const archive = process.env.SCSB_RECOVERY_ARCHIVE
 const restoreBinary = process.env.SCSB_PG_RESTORE
 assert.ok(
   archive && restoreBinary,
   'Set private archive and pg_restore executable paths',
+)
+if (manifest) {
+  const privateRoot = path.resolve('C:/private/scsb/backups')
+  assert.equal(path.dirname(path.resolve(archive)), privateRoot)
+  assert.equal(path.resolve(manifest.archive), path.resolve(archive))
+  assert.equal(manifestPath, archive + '.manifest.json')
+  assert.equal(manifest.project, 'ttwlscydylnaogawmgce')
+  assert.equal(manifest.snapshot_consistent, true)
+  assert.match(expectedHash, /^[a-f0-9]{64}$/)
+  assert.equal(
+    (await readFile(archive + '.sha256', 'utf8')).split(/\s/)[0],
+    expectedHash,
+  )
+}
+const hasServiceHistory = Boolean(
+  manifest?.counts?.['public.service_visits'] !== undefined,
 )
 const checksum = async () =>
   createHash('sha256')
@@ -45,8 +76,8 @@ const tables = [
     /^COPY ([\w.]+) \(([^\n]+)\) FROM stdin;\n([\s\S]*?)^\\\.$/gm,
   ),
 ]
-assert.equal(tables.length, 9)
-const expectedCounts = {
+assert.equal(tables.length, hasServiceHistory ? 11 : 9)
+const expectedCounts = manifest?.counts ?? {
   'public.vehicles': 1,
   'public.vehicle_maintenance_items': 5,
   'public.maintenance_templates': 0,
@@ -106,8 +137,9 @@ try {
   )
   const version = (await client.query('show server_version')).rows[0]
     .server_version
-  assert.equal(version, '18.4')
+  assert.equal(version, major === '17' ? '17.10' : '18.4')
   console.log('PostgreSQL', version)
+  await client.query("set timezone='UTC'")
   await client.query(`
     drop schema public;
     create role anon nologin;
@@ -161,6 +193,205 @@ try {
   )
   assert.equal(output.trim(), '')
   console.log('PASS transactional custom-archive restore')
+  if (manifest) {
+    stage = 'source snapshot schema equality'
+    const restored = (
+      await client.query(
+        await readFile('docs/application-backup-metadata.sql', 'utf8'),
+      )
+    ).rows[0].catalog
+    // Earlier capture revisions encoded ACLs as text. Compare ordered ACL entries.
+    const normalizeCatalog = async (catalog) =>
+      Object.fromEntries(
+        await Promise.all(
+          Object.entries(catalog).map(async ([key, entries]) => [
+            key,
+            entries
+              ? await Promise.all(
+                  entries.map(async (entry) => {
+                    if (
+                      !Object.hasOwn(entry, 'acl') ||
+                      Array.isArray(entry.acl)
+                    )
+                      return entry
+                    const acl = entry.acl
+                    if (key === 'table_acl' && acl === null) {
+                      // The original manifest used raw relacl too. Expand its NULL using
+                      // the recorded owner, keeping explicit empty/revoked ACLs distinct.
+                      const owner = catalog.tables.find(
+                        (table) =>
+                          table.schema === entry.schema &&
+                          table.name === entry.table,
+                      )?.owner
+                      assert.ok(
+                        owner,
+                        'Missing recorded table owner for default ACL',
+                      )
+                      const defaults = await client.query(
+                        "select array(select unnest(acldefault('r', $1::regrole))::text order by 1) acl",
+                        [owner],
+                      )
+                      return { ...entry, acl: defaults.rows[0].acl }
+                    }
+                    assert.ok(
+                      acl === null || !/["\\]/.test(acl),
+                      'Unexpected ACL encoding',
+                    )
+                    return {
+                      ...entry,
+                      acl: acl
+                        ? acl.slice(1, -1).split(',').filter(Boolean).sort()
+                        : [],
+                    }
+                  }),
+                )
+              : null,
+          ]),
+        ),
+      )
+    const source = await normalizeCatalog(manifest.catalog)
+    const local = await normalizeCatalog(restored)
+    for (const key of Object.keys(source)) {
+      if (!isDeepStrictEqual(local[key], source[key])) {
+        const differences = []
+        const compare = (actual, expected, location) => {
+          if (isDeepStrictEqual(actual, expected)) return
+          if (
+            actual &&
+            expected &&
+            typeof actual === 'object' &&
+            typeof expected === 'object'
+          ) {
+            for (const field of new Set([
+              ...Object.keys(actual),
+              ...Object.keys(expected),
+            ]))
+              compare(actual[field], expected[field], location + '.' + field)
+          } else {
+            const summarize = (value) => ({
+              type: typeof value,
+              sha256: createHash('sha256')
+                .update(JSON.stringify(value) ?? 'undefined')
+                .digest('hex'),
+            })
+            differences.push({
+              path: location,
+              actual: summarize(actual),
+              expected: summarize(expected),
+            })
+          }
+        }
+        compare(local[key], source[key], key)
+        console.error(
+          'Schema assertion differs:',
+          key,
+          '; fields:',
+          differences.map((item) => item.path).join(', '),
+        )
+        console.error(
+          'Expected/actual metadata fingerprints:',
+          JSON.stringify(differences),
+        )
+      }
+      assert.deepEqual(
+        local[key],
+        source[key],
+        `Restored schema section differs: ${key}`,
+      )
+    }
+    for (const [table, expected] of Object.entries(manifest.fingerprints)) {
+      assert.match(table, /^(public|app_private|supabase_migrations)\.[a-z_]+$/)
+      const actual = (
+        await client.query(
+          `select count(*)::int count,encode(sha256(convert_to(coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text)::text,'[]'),'UTF8')),'hex') hash from ${table} t`,
+        )
+      ).rows[0]
+      assert.deepEqual(
+        actual,
+        expected,
+        'Restored source snapshot fingerprint differs',
+      )
+    }
+    assert.deepEqual(
+      (
+        await client.query(
+          'select version,name,statements from supabase_migrations.schema_migrations order by version',
+        )
+      ).rows,
+      manifest.history,
+      'Restored migration ledger differs',
+    )
+    assert.equal(
+      (
+        await client.query(
+          "select to_regclass('public.vehicle_mileage_history') is null absent",
+        )
+      ).rows[0].absent,
+      true,
+    )
+    console.log(
+      'PASS source snapshot schema, owners, table/column/function ACLs, all row fingerprints and five predecessor migration records; Task 5 remains unapplied',
+    )
+    stage = 'ACL comparison regression'
+    await client.query('begin')
+    try {
+      await client.query(
+        'create table app_private.fictional_recovery_acl_probe (id integer)',
+      )
+      const probeAcl = async () =>
+        (
+          await client.query(
+            await readFile('docs/application-backup-metadata.sql', 'utf8'),
+          )
+        ).rows[0].catalog.table_acl.find(
+          (entry) => entry.table === 'fictional_recovery_acl_probe',
+        )
+      assert.equal(
+        (
+          await client.query(
+            "select relacl is null implicit from pg_class where oid='app_private.fictional_recovery_acl_probe'::regclass",
+          )
+        ).rows[0].implicit,
+        true,
+      )
+      const implicit = await probeAcl()
+      await client.query(
+        'grant all on app_private.fictional_recovery_acl_probe to postgres',
+      )
+      assert.deepEqual(
+        await probeAcl(),
+        implicit,
+        'Explicit default owner grants must equal implicit defaults',
+      )
+      await client.query(
+        'grant select on app_private.fictional_recovery_acl_probe to authenticated',
+      )
+      assert.ok(
+        !isDeepStrictEqual(await probeAcl(), implicit),
+        'Extra client grants must remain detectable',
+      )
+      await client.query(
+        'revoke select on app_private.fictional_recovery_acl_probe from authenticated',
+      )
+      assert.deepEqual(
+        await probeAcl(),
+        implicit,
+        'Removing extra grants must restore the original ACL',
+      )
+      await client.query(
+        'revoke select on app_private.fictional_recovery_acl_probe from postgres',
+      )
+      assert.ok(
+        !isDeepStrictEqual(await probeAcl(), implicit),
+        'Revoked owner privileges must remain detectable',
+      )
+    } finally {
+      await client.query('rollback')
+    }
+    console.log(
+      'PASS ACL regression: implicit/explicit owner defaults equivalent; changed client and owner grants detected; fictional probe rolled back',
+    )
+  }
   stage = 'record equality'
   const unescape = (value) =>
     value === '\\N'
@@ -211,32 +442,42 @@ try {
     await scalar(
       "select count(*)::int n from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname in ('public','app_private')",
     ),
-    5,
+    hasServiceHistory ? 8 : 5,
   )
   assert.equal(
     await scalar(
       "select count(*)::int n from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace s on s.oid=c.relnamespace where s.nspname='public' and not t.tgisinternal and t.tgenabled='O'",
     ),
-    4,
+    hasServiceHistory ? 7 : 4,
   )
   assert.equal(
     await scalar(
       "select count(*)::int n from pg_policies where schemaname in ('public','app_private')",
     ),
-    10,
+    hasServiceHistory ? 12 : 10,
   )
   const functionNames = (
     await client.query(
       "select s.nspname||'.'||p.proname name from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname in ('public','app_private') order by name",
     )
   ).rows.map((row) => row.name)
-  assert.deepEqual(functionNames, [
-    'app_private.provision_firebase_owner',
-    'public.current_app_owner',
-    'public.set_vehicle_updated_at',
-    'public.validate_maintenance_completion',
-    'public.validate_vehicle_mileage',
-  ])
+  assert.deepEqual(
+    functionNames,
+    [
+      'app_private.provision_firebase_owner',
+      'public.current_app_owner',
+      'public.set_vehicle_updated_at',
+      'public.validate_maintenance_completion',
+      'public.validate_vehicle_mileage',
+      ...(hasServiceHistory
+        ? [
+            'public.delete_service_visit',
+            'public.save_service_visit',
+            'public.validate_service_visit',
+          ]
+        : []),
+    ].sort(),
+  )
   for (const [kind, query] of [
     [
       'TRIGGER',
@@ -263,7 +504,7 @@ try {
     await scalar(
       "select count(*)::int n from pg_class c join pg_namespace s on s.oid=c.relnamespace where s.nspname in ('public','app_private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-    8,
+    hasServiceHistory ? 10 : 8,
   )
   assert.equal(
     await scalar(
@@ -287,7 +528,7 @@ try {
     await scalar(
       "select count(*)::int n from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname in ('public','app_private') and p.prosecdef and p.proconfig @> array['search_path=\"\"']",
     ),
-    2,
+    hasServiceHistory ? 4 : 2,
   )
   const privileges = (
     await client.query(`select
@@ -306,7 +547,10 @@ try {
     await client.query(`select i.firebase_uid,i.owner_id,c.project_id from app_private.firebase_identities i
     join app_private.firebase_provisioning_approvals a using(firebase_uid) cross join app_private.firebase_config c where a.enabled`)
   ).rows
-  assert.equal(identities.length, 3)
+  assert.equal(
+    identities.length,
+    hasServiceHistory ? manifest.counts['app_private.firebase_identities'] : 3,
+  )
   stage = 'owner isolation'
   for (const identity of identities) {
     await client.query('begin')
@@ -359,7 +603,7 @@ try {
     }
   }
   console.log(
-    'PASS restored Firebase ownership resolution and cross-owner read isolation for all three identities',
+    'PASS restored Firebase ownership resolution and cross-owner read isolation for restored enabled identities',
   )
   // Invalid local writes must fail and are always rolled back.
   stage = 'mileage rejection'
@@ -392,14 +636,13 @@ try {
   )
   await client.query('begin')
   try {
-    // This archive has no positive completion baseline. Prepare one only in a
-    // rolled-back local transaction to exercise the cross-table trigger.
+    // Use an independent fictional completion, leaving restored history untouched.
     await client.query(
       'update public.vehicles set mileage=greatest(mileage,20) where id=$1',
       [vehicle.id],
     )
     await client.query(
-      "update public.vehicle_maintenance_items set history_status='known',last_completed_date=current_date,last_completed_mileage=10 where vehicle_id=$1",
+      "insert into public.vehicle_maintenance_items(vehicle_id,name,interval_km,history_status,last_completed_date,last_completed_mileage) values ($1,'Fictional recovery guard',1000,'known',current_date,10)",
       [vehicle.id],
     )
     await assert.rejects(
