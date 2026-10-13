@@ -13,6 +13,8 @@ export type MaintenanceItem = MaintenanceInput & {
   vehicle_id: string
   created_at: string
   updated_at: string
+  next_interval_km?: number | null
+  next_interval_months?: number | null
 }
 export type MaintenanceTemplate = {
   id: string

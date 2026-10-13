@@ -119,3 +119,39 @@ it('refreshes the due status at midnight without reloading database data', async
     vi.useRealTimers()
   }
 })
+
+it('keeps manual completion entry available when Service History is disabled', async () => {
+  vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')
+  try {
+    render(<MaintenancePanel vehicle={vehicle} />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add operation' }),
+    )
+    fireEvent.change(screen.getByLabelText('Operation name'), {
+      target: { value: 'Fictional manual completion' },
+    })
+    fireEvent.change(screen.getByLabelText('Interval (km, optional)'), {
+      target: { value: '10000' },
+    })
+    fireEvent.change(screen.getByLabelText('Service history'), {
+      target: { value: 'known' },
+    })
+    fireEvent.change(
+      screen.getByLabelText('Last completed mileage (optional)'),
+      { target: { value: '5000' } },
+    )
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save reviewed schedule' }),
+    )
+    await waitFor(() => expect(api.saveMaintenance).toHaveBeenCalled())
+    expect(api.saveMaintenance.mock.calls[0][1][0]).toMatchObject({
+      history_status: 'known',
+      last_completed_mileage: 5000,
+    })
+    expect(
+      screen.queryByText(/Record completed work in Service history/),
+    ).not.toBeInTheDocument()
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})

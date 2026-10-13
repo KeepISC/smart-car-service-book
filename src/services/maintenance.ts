@@ -1,8 +1,11 @@
 import { client } from './supabase'
-import { validateMaintenance } from './maintenanceLogic'
+import { loadServiceHistory } from './serviceHistory'
+import { isServiceHistoryEnabled } from '../config/features'
+import { applyServiceHistory, validateMaintenance } from './maintenanceLogic'
 import {
   isMileageConsistencyViolation,
   MileageConsistencyError,
+  MaintenanceCompletionConflictError,
 } from './dataErrors'
 import type {
   MaintenanceInput,
@@ -23,6 +26,15 @@ export function maintenancePayload(input: MaintenanceInput): MaintenanceInput {
       input.history_status === 'known' ? input.last_completed_mileage : null,
   }
 }
+function maintenanceSchedulePayload(input: MaintenanceInput) {
+  const payload = maintenancePayload(input)
+  return {
+    name: payload.name,
+    interval_km: payload.interval_km,
+    interval_months: payload.interval_months,
+    enabled: payload.enabled,
+  }
+}
 export async function loadMaintenance(vehicle: Vehicle) {
   const db = client()
   const items = await db
@@ -31,6 +43,9 @@ export async function loadMaintenance(vehicle: Vehicle) {
     .eq('vehicle_id', vehicle.id)
     .order('created_at')
   if (items.error) throw items.error
+  const history = isServiceHistoryEnabled()
+    ? await loadServiceHistory(vehicle.id)
+    : []
   const templates = await db
     .from('maintenance_templates')
     .select('*, maintenance_template_items(*)')
@@ -43,7 +58,10 @@ export async function loadMaintenance(vehicle: Vehicle) {
     .gte('year_to', vehicle.year)
   if (templates.error) throw templates.error
   return {
-    items: (items.data ?? []) as MaintenanceItem[],
+    items: applyServiceHistory(
+      (items.data ?? []) as MaintenanceItem[],
+      history,
+    ),
     templates: (templates.data ?? []) as MaintenanceTemplate[],
   }
 }
@@ -63,7 +81,11 @@ export async function saveMaintenance(
   const query = id
     ? db
         .from('vehicle_maintenance_items')
-        .update(payloads[0])
+        .update(
+          isServiceHistoryEnabled()
+            ? maintenanceSchedulePayload(inputs[0])
+            : payloads[0],
+        )
         .eq('id', id)
         .eq('vehicle_id', vehicle.id)
     : db
@@ -72,6 +94,11 @@ export async function saveMaintenance(
   const { data, error } = await query.select()
   if (error && isMileageConsistencyViolation(error))
     throw new MileageConsistencyError()
+  if (
+    error?.code === '23514' &&
+    error.message === 'Completion is managed by service history'
+  )
+    throw new MaintenanceCompletionConflictError()
   if (error) throw error
   if (!data?.length)
     throw new Error('No authorized maintenance items were saved.')

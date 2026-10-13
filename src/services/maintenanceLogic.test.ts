@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyServiceHistory,
   addCalendarMonths,
   calculateMaintenance,
   validateMaintenance,
   starterSchedule,
 } from './maintenanceLogic'
-import type { MaintenanceInput } from '../types/maintenance'
+import type { MaintenanceInput, MaintenanceItem } from '../types/maintenance'
+import type { ServiceCompletionVisit } from './maintenanceLogic'
 const known: MaintenanceInput = {
   name: 'Fictional operation',
   interval_km: 20000,
@@ -15,7 +17,150 @@ const known: MaintenanceInput = {
   last_completed_date: '2025-01-31',
   last_completed_mileage: 10000,
 }
+const item: MaintenanceItem = {
+  ...known,
+  id: 'schedule-1',
+  vehicle_id: 'vehicle-1',
+  created_at: '2025-01-01T00:00:00Z',
+  updated_at: '2025-01-01T00:00:00Z',
+}
+function completion(
+  id: string,
+  serviceDate: string,
+  mileage: number,
+  nextIntervalKm: number | null = null,
+  nextIntervalMonths: number | null = null,
+): ServiceCompletionVisit {
+  return {
+    id,
+    service_date: serviceDate,
+    mileage,
+    created_at: `${serviceDate}T12:00:00Z`,
+    operations: [
+      {
+        id: `operation-${id}`,
+        maintenance_item_id: item.id,
+        next_interval_km: nextIntervalKm,
+        next_interval_months: nextIntervalMonths,
+        created_at: `${serviceDate}T12:00:00Z`,
+      },
+    ],
+  }
+}
 describe('maintenance calculations', () => {
+  it('uses the latest service completion and its one-time interval overrides', () => {
+    const older = completion('older', '2025-02-20', 22000, 5000, 6)
+    const latest = completion('latest', '2025-03-01', 23000, 15000, null)
+    const [resolved] = applyServiceHistory([item], [latest, older])
+    expect(resolved).toMatchObject({
+      history_status: 'known',
+      last_completed_date: '2025-03-01',
+      last_completed_mileage: 23000,
+      interval_km: 20000,
+      interval_months: 12,
+      next_interval_km: 15000,
+      next_interval_months: null,
+    })
+    expect(calculateMaintenance(resolved, 23000, '2025-03-01')).toMatchObject({
+      nextMileage: 38000,
+      nextDate: '2026-03-01',
+    })
+  })
+  it('keeps newer legacy baselines ahead of backdated service history', () => {
+    const baseline = {
+      ...item,
+      last_completed_date: '2025-03-01',
+      last_completed_mileage: 30000,
+    }
+    expect(
+      applyServiceHistory(
+        [baseline],
+        [completion('backdated', '2025-02-28', 29000, 5000, 3)],
+      )[0],
+    ).toEqual(baseline)
+  })
+  it('uses mileage to break same-day completion ties without regressing a baseline', () => {
+    const baseline = {
+      ...item,
+      last_completed_date: '2025-03-01',
+      last_completed_mileage: 30000,
+    }
+    expect(
+      applyServiceHistory(
+        [baseline],
+        [
+          completion('same-day-older', '2025-03-01', 29000),
+          completion('same-day-newer', '2025-03-01', 31000),
+        ],
+      )[0],
+    ).toMatchObject({
+      last_completed_date: '2025-03-01',
+      last_completed_mileage: 31000,
+    })
+    expect(
+      applyServiceHistory(
+        [baseline],
+        [completion('same-day-backdated', '2025-03-01', 29000)],
+      )[0],
+    ).toEqual(baseline)
+  })
+  it('compares service history to mileage-only baselines', () => {
+    const baseline = {
+      ...item,
+      last_completed_date: null,
+      last_completed_mileage: 35000,
+    }
+    expect(
+      applyServiceHistory(
+        [baseline],
+        [completion('older', '2025-02-28', 25000)],
+      )[0],
+    ).toEqual(baseline)
+    expect(
+      applyServiceHistory(
+        [baseline],
+        [completion('newer', '2025-03-01', 40000)],
+      )[0],
+    ).toMatchObject({
+      last_completed_date: '2025-03-01',
+      last_completed_mileage: 40000,
+    })
+  })
+  it('falls back to the remaining completion or unchanged baseline after deletion', () => {
+    const baseline = {
+      ...item,
+      last_completed_date: '2025-01-01',
+      last_completed_mileage: 10000,
+    }
+    const older = completion('older', '2025-02-01', 12000)
+    const newest = completion('newest', '2025-03-01', 15000)
+    expect(
+      applyServiceHistory([baseline], [older, newest])[0].last_completed_date,
+    ).toBe('2025-03-01')
+    expect(
+      applyServiceHistory([baseline], [older])[0].last_completed_date,
+    ).toBe('2025-02-01')
+    expect(applyServiceHistory([baseline], [])[0].last_completed_date).toBe(
+      '2025-01-01',
+    )
+  })
+  it('replaces not-applicable status only in the derived view when a completion exists', () => {
+    const notApplicable = {
+      ...item,
+      history_status: 'not_applicable' as const,
+      last_completed_date: null,
+      last_completed_mileage: null,
+    }
+    expect(
+      applyServiceHistory(
+        [notApplicable],
+        [completion('actual', '2025-03-01', 20000)],
+      )[0].history_status,
+    ).toBe('known')
+    expect(applyServiceHistory([notApplicable], [])[0].history_status).toBe(
+      'not_applicable',
+    )
+  })
   it('adds mileage intervals to the last completion, not current mileage', () => {
     const result = calculateMaintenance(
       { ...known, interval_months: null },
@@ -114,6 +259,33 @@ describe('maintenance calculations', () => {
         '2025-02-01',
       ).status,
     ).toBe('Due / overdue')
+  })
+  it('uses next-interval overrides only for the dimensions that were changed', () => {
+    expect(
+      calculateMaintenance(
+        {
+          ...known,
+          next_interval_km: 10000,
+          next_interval_months: 1,
+        },
+        15000,
+        '2025-02-01',
+      ),
+    ).toMatchObject({
+      nextMileage: 20000,
+      nextDate: '2025-02-28',
+      status: 'Due soon',
+    })
+    expect(
+      calculateMaintenance(
+        { ...known, next_interval_km: 12000, next_interval_months: null },
+        15000,
+        '2025-02-01',
+      ),
+    ).toMatchObject({
+      nextMileage: 22000,
+      nextDate: '2026-01-31',
+    })
   })
   it('does not invent dates from distance', () =>
     expect(

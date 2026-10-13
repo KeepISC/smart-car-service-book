@@ -1,0 +1,2 @@
+# Preserve the exact bytes of the checksum-approved deployed migration.
+supabase/migrations/202610120002_service_history.sql -text

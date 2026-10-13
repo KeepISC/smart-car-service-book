@@ -41,7 +41,8 @@ body {
   overflow-wrap: anywhere;
 }
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 button,
@@ -438,6 +439,21 @@ input::placeholder {
 }
 input[aria-invalid='true'] {
   border-color: #d94a4a;
+}
+textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 11px 13px;
+  font-size: 14px;
+}
+textarea:focus-visible {
+  outline: 3px solid #78a8ff;
+  outline-offset: 4px;
 }
 fieldset {
   border: 0;
@@ -927,6 +943,154 @@ dd {
 .vehicle-tabs button.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
+}
+.service-history {
+  min-width: 0;
+}
+.service-form,
+.service-visit,
+.service-delete-confirm {
+  min-width: 0;
+}
+.service-form h3,
+.service-delete-confirm h3 {
+  margin-bottom: 18px;
+}
+.service-form fieldset {
+  margin: 24px 0;
+}
+.service-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.service-type-options legend {
+  width: 100%;
+}
+.service-schedule-choices {
+  display: grid;
+  gap: 10px;
+}
+.service-schedule-choices .maintenance-checkbox {
+  overflow-wrap: anywhere;
+}
+.service-operation-draft {
+  padding: 18px 0;
+  margin: 18px 0;
+  border-top: 1px solid var(--border);
+}
+.service-operation-draft h3 {
+  margin: 0;
+}
+.service-operation-draft .section-heading {
+  margin-bottom: 16px;
+}
+.service-timeline {
+  display: grid;
+  gap: 16px;
+}
+.service-visit .section-heading {
+  align-items: flex-start;
+}
+.service-visit .section-heading h3 {
+  margin: 7px 0;
+}
+.service-mileage {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.service-operation-list {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0 0;
+  border-top: 1px solid var(--border);
+}
+.service-operation-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.service-operation-list li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.service-operation-list li > span:last-child {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.service-cost-details dl {
+  margin: 0;
+}
+.service-cost-details > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  font-size: 13px;
+}
+.service-cost-details dd {
+  font-weight: 650;
+}
+.service-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 14px 0;
+  font-size: 13px;
+}
+.service-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  color: var(--muted);
+  padding: 36px 20px;
+}
+.service-empty h3 {
+  color: var(--text);
+}
+.service-empty p {
+  font-size: 13px;
+}
+.service-feedback {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 13px;
+}
+.service-feedback.error {
+  color: #ad263a;
+  background: #ffeaef;
+}
+.service-feedback.success {
+  color: #167148;
+  background: #e7f7ee;
+}
+.dark .service-feedback.error {
+  color: #ffb1b8;
+  background: #381c2a;
+}
+.dark .service-feedback.success {
+  color: #9be0b3;
+  background: #163324;
+}
+@media (max-width: 380px) {
+  .panel {
+    padding: 18px 14px;
+  }
+  .vehicle-tabs {
+    gap: 12px;
+  }
+  .vehicle-tabs button {
+    padding-right: 1px;
+    padding-left: 1px;
+    font-size: 12px;
+  }
 }
 select {
   font: inherit;

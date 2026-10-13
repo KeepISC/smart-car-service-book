@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, CarFront, Bike, Trash2 } from 'lucide-react'
 import { getVehicle, deleteVehicle } from '../services/vehicles'
 import { ErrorState, Loading } from '../components/States'
 import type { Vehicle } from '../types/vehicle'
 import { MaintenancePanel } from '../components/MaintenancePanel'
+import { isServiceHistoryEnabled } from '../config/features'
+const ServiceHistoryPanel = lazy(async () => ({
+  default: (await import('../components/ServiceHistoryPanel'))
+    .ServiceHistoryPanel,
+}))
 export function VehicleDetails() {
   const { id } = useParams()
   return <VehicleDetailsView key={id} />
@@ -14,6 +19,9 @@ function VehicleDetailsView() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const maintenanceTab = searchParams.get('tab') === 'maintenance'
+  const historyEnabled = isServiceHistoryEnabled()
+  const serviceHistoryTab =
+    historyEnabled && searchParams.get('tab') === 'history'
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -73,8 +81,8 @@ function VehicleDetailsView() {
           </div>
           <div className="vehicle-tabs" aria-label="Vehicle sections">
             <button
-              className={!maintenanceTab ? 'active' : ''}
-              aria-pressed={!maintenanceTab}
+              className={!maintenanceTab && !serviceHistoryTab ? 'active' : ''}
+              aria-pressed={!maintenanceTab && !serviceHistoryTab}
               onClick={() => setSearchParams({})}
             >
               Overview
@@ -86,9 +94,22 @@ function VehicleDetailsView() {
             >
               Maintenance
             </button>
+            {historyEnabled && (
+              <button
+                className={serviceHistoryTab ? 'active' : ''}
+                aria-pressed={serviceHistoryTab}
+                onClick={() => setSearchParams({ tab: 'history' })}
+              >
+                Service history
+              </button>
+            )}
           </div>
           {maintenanceTab ? (
             <MaintenancePanel key={vehicle.id} vehicle={vehicle} />
+          ) : serviceHistoryTab ? (
+            <Suspense fallback={<Loading />}>
+              <ServiceHistoryPanel key={vehicle.id} vehicle={vehicle} />
+            </Suspense>
           ) : (
             <>
               <div className="detail-grid">
@@ -124,13 +145,17 @@ function VehicleDetailsView() {
               <section className="panel danger-zone">
                 <h2>Remove vehicle</h2>
                 <p className="muted">
-                  Permanently remove this vehicle from your garage.
+                  Permanently remove this vehicle and its maintenance schedule
+                  {historyEnabled ? ', including its service history' : ''} from
+                  your garage.
                 </p>
                 {confirm ? (
                   <div role="group" aria-label="Confirm vehicle deletion">
                     <p>
-                      Delete {vehicle.make} {vehicle.model}? This cannot be
-                      undone.
+                      Delete {vehicle.make} {vehicle.model}? This also removes
+                      its maintenance schedule
+                      {historyEnabled ? ' and service history' : ''}. This
+                      cannot be undone.
                     </p>
                     <div className="form-actions">
                       <button

@@ -7,6 +7,15 @@ export class MileageConsistencyError extends Error {
   }
 }
 
+export class MaintenanceCompletionConflictError extends Error {
+  constructor() {
+    super(
+      'This completion is managed by recorded service work. Refresh the application and edit the service visit instead. Your existing history has been preserved.',
+    )
+    this.name = 'MaintenanceCompletionConflictError'
+  }
+}
+
 export function isMileageConsistencyViolation(error: {
   code?: string
   message?: string

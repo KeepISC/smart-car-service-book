@@ -4,9 +4,9 @@
 
 See [Architecture and provider portability](docs/architecture.md) for the service/authentication boundaries and the Supabase-specific identity changes needed for a future PostgreSQL migration.
 
-A mobile-first personal vehicle garage built with React, TypeScript, Vite, Tailwind CSS, React Router, Lucide and Supabase. Includes email/password registration and login, Google OAuth, persistent sessions, protected routes, vehicle CRUD, and light/dark/system themes.
+A mobile-first personal vehicle garage built with React, TypeScript, Vite, Tailwind CSS, React Router, Lucide and Supabase. Includes email/password registration and login, Google OAuth, persistent sessions, protected routes, vehicle CRUD, service history and light/dark/system themes.
 
-Maintenance schedules support reviewed starter or verified templates, custom operations, and the last known completion date/mileage. Detailed service records, notifications and vehicle lookup remain outside scope.
+Maintenance schedules support reviewed starter or verified templates and custom operations. Service History records workshop visits and DIY maintenance, expenses, multiple scheduled/custom operations and one-time interval overrides. Notifications and vehicle lookup remain outside scope.
 
 ## Maintenance schedules (Task 2)
 
@@ -18,7 +18,19 @@ The 11 October audit verified that `supabase/migrations/202610110001_maintenance
 
 Calculations are in `src/services/maintenanceLogic.ts`. Next mileage uses the previous completion mileage; next date uses calendar months with month-end clamping. Either independent limit can make an item due. Due-soon thresholds are inclusive at 1,000 km and 30 calendar days. Unknown history never implies overdue; partial baselines remain unknown unless a known limit is due or approaching. Disabled and not applicable items do not produce due statuses. No estimated dates are inferred from kilometres. Completion dates cannot be in the future, and completion mileage cannot exceed current vehicle mileage.
 
-The GitHub Actions database job executes both migrations and the rollback-based owner isolation tests on a disposable PostgreSQL 17 database. Its fictional password is only for that ephemeral CI service. `supabase/tests/bootstrap.sql` emulates minimal Supabase auth roles **for CI only; never run it on a Supabase project**. Database tests cover cross-owner reads/writes, anonymous denial, protected catalogs, immutable vehicle association and completion constraints. Live Supabase verification still requires approved migration application; SQL tests are not executed remotely automatically.
+The GitHub Actions database job executes the migrations and rollback-based owner isolation tests on a disposable PostgreSQL 17 database. Its fictional password is only for that ephemeral CI service. `supabase/tests/bootstrap.sql` emulates minimal Supabase auth roles **for CI only; never run it on a Supabase project**. Database tests cover cross-owner reads/writes, anonymous denial, protected catalogs, immutable vehicle association, service-history validation, preserved maintenance baselines and concurrency. Live Supabase verification still requires approved migration application; SQL tests are not executed remotely automatically.
+
+## Service History (Task 3)
+
+The vehicle details page includes Overview, Maintenance and Service history sections. A visit can be DIY or at a workshop and records its date, odometer, optional workshop name, total expense, notes and one or more scheduled or custom operations. An operation may also record an individual expense and one-time next-interval overrides. Scheduled interval defaults are never changed by an override.
+
+All visit creation, editing and deletion uses PostgreSQL functions in `supabase/migrations/202610120002_service_history.sql`. Each mutation is a single database transaction, checks the stable authenticated owner and same-vehicle schedule references, locks its vehicle row and validates odometer consistency. Supabase RLS is enabled and forced on both service-history tables; browser table mutations are not granted. The maintenance service derives each current completion from the newest dated linked operation without writing to the schedule row. It compares that completion with the pre-existing completion date, or mileage when the legacy date is absent; mileage breaks same-day ties, and backdated history cannot displace a newer baseline. Overrides are applied only to the winning completion and never alter permanent intervals. Editing or deleting history naturally selects the next remaining completion or falls back to the unchanged baseline.
+
+The migration preserves existing `vehicle_maintenance_items` completion values in place and does not fabricate visit dates, odometers, costs or workshop details. Existing completion status (including unknown and not applicable) and permanent maintenance intervals remain unchanged in the database; the derived view reports a linked service completion as known and restores the original status when no service completion remains. Earlier migrations are unchanged. The approved Service History migration was applied on 13 October 2026; do not reapply it to that project.
+
+Service History remains disabled by default. Set `VITE_SERVICE_HISTORY_ENABLED=true` only for an explicitly approved build after schema and acceptance verification; Vite reads the flag at startup/build time, so restart the development server or rebuild. Removing the flag or setting it to `false` restores the feature-off UI. The flag is a UI gate, not a database authorization boundary. See the [final verification](docs/task3-final-verification.md) for the current publication status and remaining limits.
+
+For an explicitly approved deployment, review and apply the forward-only service-history migration after the existing vehicle, maintenance, Firebase identity and mileage-consistency migrations. It briefly locks vehicles and maintenance rows while installing the service mileage guard and access restrictions; schedule it during a suitable maintenance window. Do not apply it as part of a frontend release or use `supabase db push` without explicit approval. Run the service-history migration-preservation and RLS tests plus the disposable-database service concurrency test only against local/CI PostgreSQL after all preceding migrations.
 
 ## Local setup
 

@@ -1,4 +1,4 @@
-import type { MaintenanceInput } from '../types/maintenance'
+import type { MaintenanceInput, MaintenanceItem } from '../types/maintenance'
 export type MaintenanceStatus =
   | 'Up to date'
   | 'Due soon'
@@ -6,6 +6,61 @@ export type MaintenanceStatus =
   | 'Unknown'
   | 'Disabled'
   | 'Not applicable'
+export type ServiceCompletionVisit = {
+  id: string
+  service_date: string
+  mileage: number
+  created_at: string
+  operations: {
+    id: string
+    maintenance_item_id: string | null
+    next_interval_km: number | null
+    next_interval_months: number | null
+    created_at: string
+  }[]
+}
+
+export function applyServiceHistory(
+  items: MaintenanceItem[],
+  visits: ServiceCompletionVisit[],
+): MaintenanceItem[] {
+  return items.map((item) => {
+    const latest = visits
+      .flatMap((visit) =>
+        visit.operations
+          .filter((operation) => operation.maintenance_item_id === item.id)
+          .map((operation) => ({ visit, operation })),
+      )
+      .sort(
+        (left, right) =>
+          right.visit.service_date.localeCompare(left.visit.service_date) ||
+          right.visit.mileage - left.visit.mileage ||
+          right.visit.created_at.localeCompare(left.visit.created_at) ||
+          right.operation.created_at.localeCompare(left.operation.created_at) ||
+          right.operation.id.localeCompare(left.operation.id),
+      )[0]
+    if (!latest) return item
+
+    const supersedesBaseline =
+      item.last_completed_date !== null
+        ? latest.visit.service_date > item.last_completed_date ||
+          (latest.visit.service_date === item.last_completed_date &&
+            (item.last_completed_mileage === null ||
+              latest.visit.mileage >= item.last_completed_mileage))
+        : item.last_completed_mileage === null ||
+          latest.visit.mileage >= item.last_completed_mileage
+    if (!supersedesBaseline) return item
+
+    return {
+      ...item,
+      history_status: 'known',
+      last_completed_date: latest.visit.service_date,
+      last_completed_mileage: latest.visit.mileage,
+      next_interval_km: latest.operation.next_interval_km,
+      next_interval_months: latest.operation.next_interval_months,
+    }
+  })
+}
 export function dateOnly(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
@@ -16,6 +71,9 @@ function parseDate(value: string): Date | null {
     parsed.toISOString().slice(0, 10) === value
     ? parsed
     : null
+}
+export function isValidDateOnly(value: string): boolean {
+  return parseDate(value) !== null
 }
 export function addCalendarMonths(
   value: string,
@@ -34,7 +92,10 @@ export function addCalendarMonths(
   return target.toISOString().slice(0, 10)
 }
 export function calculateMaintenance(
-  item: MaintenanceInput,
+  item: MaintenanceInput & {
+    next_interval_km?: number | null
+    next_interval_months?: number | null
+  },
   mileage: number,
   today = dateOnly(),
 ) {
@@ -54,16 +115,24 @@ export function calculateMaintenance(
     return { ...result, status: 'Not applicable' as const }
   if (item.history_status !== 'known') return result
   result.nextMileage =
-    item.interval_km !== null && item.last_completed_mileage !== null
-      ? item.interval_km + item.last_completed_mileage
+    (item.next_interval_km ?? item.interval_km) !== null &&
+    item.last_completed_mileage !== null
+      ? (item.next_interval_km ?? item.interval_km)! +
+        item.last_completed_mileage
       : null
   result.nextDate =
-    item.interval_months !== null && item.last_completed_date !== null
-      ? addCalendarMonths(item.last_completed_date, item.interval_months)
+    (item.next_interval_months ?? item.interval_months) !== null &&
+    item.last_completed_date !== null
+      ? addCalendarMonths(
+          item.last_completed_date,
+          (item.next_interval_months ?? item.interval_months)!,
+        )
       : null
   result.partialHistory =
-    (item.interval_km !== null && result.nextMileage === null) ||
-    (item.interval_months !== null && result.nextDate === null)
+    ((item.next_interval_km ?? item.interval_km) !== null &&
+      result.nextMileage === null) ||
+    ((item.next_interval_months ?? item.interval_months) !== null &&
+      result.nextDate === null)
   const currentDate = parseDate(today)
   const dueDate = result.nextDate ? parseDate(result.nextDate) : null
   const daysRemaining =

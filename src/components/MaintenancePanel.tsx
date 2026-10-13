@@ -18,7 +18,12 @@ import {
 } from '../services/maintenanceLogic'
 import { ErrorState, Loading } from './States'
 import { useLocalDate } from '../hooks/useLocalDate'
-import { MileageConsistencyError } from '../services/dataErrors'
+import {
+  MileageConsistencyError,
+  MaintenanceCompletionConflictError,
+} from '../services/dataErrors'
+import { isServiceHistoryEnabled } from '../config/features'
+import { LegacyMaintenanceCompletionFields } from './LegacyMaintenanceCompletionFields'
 
 const blank: MaintenanceInput = {
   name: '',
@@ -51,25 +56,6 @@ function Fields({
           onChange={(e) => change({ ...value, name: e.target.value })}
         />
       </label>
-      <label>
-        Service history
-        <select
-          value={value.history_status}
-          onChange={(e) =>
-            change({
-              ...value,
-              history_status: e.target
-                .value as MaintenanceInput['history_status'],
-              last_completed_date: null,
-              last_completed_mileage: null,
-            })
-          }
-        >
-          <option value="unknown">Unknown</option>
-          <option value="known">Known</option>
-          <option value="not_applicable">Not applicable</option>
-        </select>
-      </label>
       {(['interval_km', 'interval_months'] as const).map((field) => (
         <label key={field}>
           Interval ({field === 'interval_km' ? 'km' : 'months'}, optional)
@@ -88,40 +74,18 @@ function Fields({
           />
         </label>
       ))}
-      {value.history_status === 'known' && (
-        <>
-          <label>
-            Last completed date (optional)
-            <input
-              type="date"
-              max={today}
-              value={value.last_completed_date ?? ''}
-              onChange={(e) =>
-                change({
-                  ...value,
-                  last_completed_date: e.target.value || null,
-                })
-              }
-            />
-          </label>
-          <label>
-            Last completed mileage (optional)
-            <input
-              type="number"
-              min={0}
-              max={mileage}
-              step={1}
-              value={value.last_completed_mileage ?? ''}
-              onChange={(e) =>
-                change({
-                  ...value,
-                  last_completed_mileage:
-                    e.target.value === '' ? null : Number(e.target.value),
-                })
-              }
-            />
-          </label>
-        </>
+      {isServiceHistoryEnabled() ? (
+        <p className="muted maintenance-history-note">
+          Record completed work in Service history so maintenance due dates stay
+          synchronized with your visits.
+        </p>
+      ) : (
+        <LegacyMaintenanceCompletionFields
+          value={value}
+          change={change}
+          mileage={mileage}
+          today={today}
+        />
       )}
       <label className="maintenance-checkbox">
         <input
@@ -217,16 +181,15 @@ export function MaintenancePanel({ vehicle }: { vehicle: Vehicle }) {
     setBusy(true)
     setError('')
     try {
-      const saved = await saveMaintenance(vehicle, values, id)
-      setItems((previous) =>
-        id
-          ? previous.map((item) => (item.id === id ? saved[0] : item))
-          : [...previous, ...saved],
-      )
+      await saveMaintenance(vehicle, values, id)
       setDrafts(null)
+      // The returned schedule row contains the legacy baseline, not the
+      // completion and interval overrides derived from service history.
+      await reload()
     } catch (failure) {
       setError(
-        failure instanceof MileageConsistencyError
+        failure instanceof MileageConsistencyError ||
+          failure instanceof MaintenanceCompletionConflictError
           ? failure.message
           : 'Unable to save maintenance. Check your connection and permissions, then try again.',
       )
