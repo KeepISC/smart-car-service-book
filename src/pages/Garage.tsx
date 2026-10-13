@@ -10,6 +10,7 @@ import {
 import { useVehicles } from '../hooks/useVehicles'
 import { authService } from '../services/auth'
 import { Loading, ErrorState } from '../components/States'
+import { MaintenanceAlertSummary } from '../components/MaintenanceAlertSummary'
 export function Garage() {
   const { vehicles, loading, error, reload } = useVehicles()
   return (
@@ -78,6 +79,11 @@ export function Garage() {
           <small>Ready for the open road</small>
         </div>
       </section>
+      <MaintenanceAlertSummary
+        vehicles={vehicles}
+        vehiclesLoading={loading}
+        vehiclesError={error}
+      />
       <div className="section-heading">
         <h2>
           Your vehicles <span className="count">{vehicles.length}</span>

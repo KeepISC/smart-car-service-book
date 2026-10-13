@@ -1194,3 +1194,179 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+.maintenance-alerts-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 30px;
+  min-width: 0;
+  max-width: 100%;
+}
+.maintenance-alerts-card .section-heading {
+  margin-bottom: 16px;
+  min-width: 0;
+}
+.maintenance-alert-counters {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+  min-width: 0;
+}
+.alert-stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+.alert-stat > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  gap: 6px;
+  min-width: 0;
+}
+.alert-stat > span svg {
+  flex-shrink: 0;
+}
+.alert-stat strong {
+  display: block;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  font-weight: 700;
+  margin: 8px 0 2px;
+  color: var(--text);
+  min-width: 0;
+}
+.alert-stat small {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+.alert-stat.overdue.has-alerts {
+  color: #ad263a;
+  background: #fff1f3;
+  border-color: #fecdd3;
+}
+.alert-stat.overdue.has-alerts strong,
+.alert-stat.overdue.has-alerts span,
+.alert-stat.overdue.has-alerts small {
+  color: #ad263a;
+}
+.dark .alert-stat.overdue.has-alerts {
+  color: #ffb1b8;
+  background: #381c2a;
+  border-color: #592534;
+}
+.dark .alert-stat.overdue.has-alerts strong,
+.dark .alert-stat.overdue.has-alerts span,
+.dark .alert-stat.overdue.has-alerts small {
+  color: #ffb1b8;
+}
+.alert-stat.soon.has-alerts {
+  color: #855400;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.alert-stat.soon.has-alerts strong,
+.alert-stat.soon.has-alerts span,
+.alert-stat.soon.has-alerts small {
+  color: #855400;
+}
+.dark .alert-stat.soon.has-alerts {
+  color: #ffd875;
+  background: #332712;
+  border-color: #5c451a;
+}
+.dark .alert-stat.soon.has-alerts strong,
+.dark .alert-stat.soon.has-alerts span,
+.dark .alert-stat.soon.has-alerts small {
+  color: #ffd875;
+}
+.maintenance-alerts-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 10px 14px;
+  border-radius: 9px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.maintenance-alerts-status svg {
+  flex-shrink: 0;
+}
+.maintenance-alerts-status.up-to-date {
+  color: #167148;
+  background: #e7f7ee;
+}
+.dark .maintenance-alerts-status.up-to-date {
+  color: #9be0b3;
+  background: #163324;
+}
+.maintenance-alerts-status.attention {
+  color: #855400;
+  background: #fffbeb;
+}
+.dark .maintenance-alerts-status.attention {
+  color: #ffd875;
+  background: #332712;
+}
+.maintenance-alerts-status.overdue {
+  color: #ad263a;
+  background: #fff1f3;
+}
+.dark .maintenance-alerts-status.overdue {
+  color: #ffb1b8;
+  background: #381c2a;
+}
+.maintenance-alerts-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 8px;
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 0;
+}
+.alert-empty-note {
+  font-size: 13px;
+  margin: 0;
+  min-width: 0;
+}
+@media (max-width: 380px) {
+  .maintenance-alerts-card {
+    padding: 16px 12px;
+  }
+  .alert-stat {
+    padding: 12px 14px;
+  }
+}
+@media (max-width: 480px) {
+  .maintenance-alert-counters {
+    grid-template-columns: 1fr;
+  }
+}
+@media (min-width: 768px) {
+  .maintenance-alerts-card {
+    padding: 24px;
+  }
+  .alert-stat {
+    padding: 18px 20px;
+  }
+  .alert-stat strong {
+    font-size: 32px;
+  }
+}

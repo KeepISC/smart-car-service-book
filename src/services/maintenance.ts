@@ -1,13 +1,19 @@
 import { client } from './supabase'
 import { loadServiceHistory } from './serviceHistory'
 import { isServiceHistoryEnabled } from '../config/features'
-import { applyServiceHistory, validateMaintenance } from './maintenanceLogic'
+import {
+  aggregateMaintenanceAlerts,
+  applyServiceHistory,
+  dateOnly,
+  validateMaintenance,
+} from './maintenanceLogic'
 import {
   isMileageConsistencyViolation,
   MileageConsistencyError,
   MaintenanceCompletionConflictError,
 } from './dataErrors'
 import type {
+  MaintenanceAlertSummary,
   MaintenanceInput,
   MaintenanceItem,
   MaintenanceTemplate,
@@ -35,7 +41,9 @@ function maintenanceSchedulePayload(input: MaintenanceInput) {
     enabled: payload.enabled,
   }
 }
-export async function loadMaintenance(vehicle: Vehicle) {
+export async function loadVehicleMaintenance(
+  vehicle: Vehicle,
+): Promise<MaintenanceItem[]> {
   const db = client()
   const items = await db
     .from('vehicle_maintenance_items')
@@ -46,6 +54,26 @@ export async function loadMaintenance(vehicle: Vehicle) {
   const history = isServiceHistoryEnabled()
     ? await loadServiceHistory(vehicle.id)
     : []
+  return applyServiceHistory((items.data ?? []) as MaintenanceItem[], history)
+}
+export async function loadGarageMaintenanceSummary(
+  vehicles: Vehicle[],
+  today = dateOnly(),
+): Promise<MaintenanceAlertSummary> {
+  if (!vehicles.length) {
+    return { overdue: 0, dueSoon: 0 }
+  }
+  const results = await Promise.all(
+    vehicles.map(async (vehicle) => {
+      const items = await loadVehicleMaintenance(vehicle)
+      return { vehicle, items }
+    }),
+  )
+  return aggregateMaintenanceAlerts(results, today)
+}
+export async function loadMaintenance(vehicle: Vehicle) {
+  const db = client()
+  const items = await loadVehicleMaintenance(vehicle)
   const templates = await db
     .from('maintenance_templates')
     .select('*, maintenance_template_items(*)')
@@ -58,10 +86,7 @@ export async function loadMaintenance(vehicle: Vehicle) {
     .gte('year_to', vehicle.year)
   if (templates.error) throw templates.error
   return {
-    items: applyServiceHistory(
-      (items.data ?? []) as MaintenanceItem[],
-      history,
-    ),
+    items,
     templates: (templates.data ?? []) as MaintenanceTemplate[],
   }
 }

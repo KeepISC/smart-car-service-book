@@ -32,3 +32,7 @@ export type MaintenanceTemplate = {
   verified_at: string | null
   maintenance_template_items: MaintenanceInput[]
 }
+export type MaintenanceAlertSummary = {
+  overdue: number
+  dueSoon: number
+}

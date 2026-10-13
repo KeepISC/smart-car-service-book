@@ -5,6 +5,7 @@ import {
   calculateMaintenance,
   validateMaintenance,
   starterSchedule,
+  aggregateMaintenanceAlerts,
 } from './maintenanceLogic'
 import type { MaintenanceInput, MaintenanceItem } from '../types/maintenance'
 import type { ServiceCompletionVisit } from './maintenanceLogic'
@@ -347,5 +348,166 @@ describe('maintenance calculations', () => {
     expect(
       starterSchedule.every((item) => item.history_status === 'unknown'),
     ).toBe(true)
+  })
+})
+
+describe('aggregateMaintenanceAlerts', () => {
+  it('returns zero counts for an empty vehicle list or vehicles with no items', () => {
+    expect(aggregateMaintenanceAlerts([])).toEqual({ overdue: 0, dueSoon: 0 })
+    expect(
+      aggregateMaintenanceAlerts([
+        { vehicle: { mileage: 50000 }, items: [] },
+        { vehicle: { mileage: 20000 }, items: [] },
+      ]),
+    ).toEqual({ overdue: 0, dueSoon: 0 })
+  })
+
+  it('aggregates overdue and due soon counters across multiple vehicles', () => {
+    const overdueKm: MaintenanceInput = {
+      name: 'Overdue KM',
+      interval_km: 10000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 10000,
+    }
+    const dueSoonKm: MaintenanceInput = {
+      name: 'Due soon KM',
+      interval_km: 10000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 10000,
+    }
+    const upToDate: MaintenanceInput = {
+      name: 'Up to date',
+      interval_km: 10000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 10000,
+    }
+
+    const summary = aggregateMaintenanceAlerts([
+      {
+        vehicle: { mileage: 20500 }, // overdueKm next mileage is 20000 -> overdue
+        items: [overdueKm],
+      },
+      {
+        vehicle: { mileage: 19500 }, // dueSoonKm next mileage is 20000 -> 500 km remaining -> due soon
+        items: [dueSoonKm],
+      },
+      {
+        vehicle: { mileage: 12000 }, // upToDate next mileage is 20000 -> 8000 km remaining -> up to date
+        items: [upToDate],
+      },
+    ])
+
+    expect(summary).toEqual({ overdue: 1, dueSoon: 1 })
+  })
+
+  it('excludes disabled and not-applicable operations from counters', () => {
+    const disabledOverdue: MaintenanceInput = {
+      name: 'Disabled Overdue',
+      interval_km: 5000,
+      interval_months: null,
+      enabled: false,
+      history_status: 'known',
+      last_completed_date: null,
+      last_completed_mileage: 0,
+    }
+    const notApplicable: MaintenanceInput = {
+      name: 'Not Applicable',
+      interval_km: 5000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'not_applicable',
+      last_completed_date: null,
+      last_completed_mileage: null,
+    }
+    const unknownHistory: MaintenanceInput = {
+      name: 'Unknown History',
+      interval_km: 5000,
+      interval_months: null,
+      enabled: true,
+      history_status: 'unknown',
+      last_completed_date: null,
+      last_completed_mileage: null,
+    }
+
+    const summary = aggregateMaintenanceAlerts([
+      {
+        vehicle: { mileage: 50000 },
+        items: [disabledOverdue, notApplicable, unknownHistory],
+      },
+    ])
+
+    expect(summary).toEqual({ overdue: 0, dueSoon: 0 })
+  })
+
+  it('evaluates date-based overdue and due soon operations accurately', () => {
+    const overdueDate: MaintenanceInput = {
+      name: 'Overdue Date',
+      interval_km: null,
+      interval_months: 6,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-01-01', // due 2025-07-01
+      last_completed_mileage: null,
+    }
+    const dueSoonDate: MaintenanceInput = {
+      name: 'Due Soon Date',
+      interval_km: null,
+      interval_months: 6,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-03-01', // due 2025-09-01
+      last_completed_mileage: null,
+    }
+
+    const summary = aggregateMaintenanceAlerts(
+      [
+        {
+          vehicle: { mileage: 10000 },
+          items: [overdueDate, dueSoonDate],
+        },
+      ],
+      '2025-08-15', // after overdueDate (overdue), 17 days before dueSoonDate (due soon <= 30 days)
+    )
+
+    expect(summary).toEqual({ overdue: 1, dueSoon: 1 })
+  })
+
+  it('reflects service history completions and interval overrides', () => {
+    const itemWithHistoryOverride: MaintenanceInput & {
+      next_interval_km?: number | null
+      next_interval_months?: number | null
+    } = {
+      name: 'Brake fluid with override',
+      interval_km: 30000,
+      interval_months: 24,
+      enabled: true,
+      history_status: 'known',
+      last_completed_date: '2025-01-01',
+      last_completed_mileage: 20000,
+      next_interval_km: 5000, // one-time override: due at 25000 instead of 50000!
+      next_interval_months: 3, // one-time override: due 2025-04-01 instead of 2027-01-01!
+    }
+
+    // Vehicle at 26000 mileage -> overdue because of 5000 km override (25000 < 26000)
+    const summary = aggregateMaintenanceAlerts(
+      [
+        {
+          vehicle: { mileage: 26000 },
+          items: [itemWithHistoryOverride],
+        },
+      ],
+      '2025-02-01',
+    )
+
+    expect(summary).toEqual({ overdue: 1, dueSoon: 0 })
   })
 })

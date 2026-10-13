@@ -1,4 +1,8 @@
-import type { MaintenanceInput, MaintenanceItem } from '../types/maintenance'
+import type {
+  MaintenanceAlertSummary,
+  MaintenanceInput,
+  MaintenanceItem,
+} from '../types/maintenance'
 export type MaintenanceStatus =
   | 'Up to date'
   | 'Due soon'
@@ -231,3 +235,27 @@ export const starterSchedule: MaintenanceInput[] = [
   last_completed_date: null,
   last_completed_mileage: null,
 }))
+export function aggregateMaintenanceAlerts(
+  vehiclesWithItems: {
+    vehicle: { mileage: number }
+    items: (MaintenanceInput & {
+      next_interval_km?: number | null
+      next_interval_months?: number | null
+    })[]
+  }[],
+  today = dateOnly(),
+): MaintenanceAlertSummary {
+  let overdue = 0
+  let dueSoon = 0
+  for (const { vehicle, items } of vehiclesWithItems) {
+    for (const item of items) {
+      const { status } = calculateMaintenance(item, vehicle.mileage, today)
+      if (status === 'Due / overdue') {
+        overdue += 1
+      } else if (status === 'Due soon') {
+        dueSoon += 1
+      }
+    }
+  }
+  return { overdue, dueSoon }
+}

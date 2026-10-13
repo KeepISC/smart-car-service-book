@@ -6,7 +6,7 @@ vi.mock('./supabase', () => ({ client: () => ({ from: api.from }) }))
 vi.mock('./serviceHistory', () => ({
   loadServiceHistory: api.loadServiceHistory,
 }))
-import { loadMaintenance } from './maintenance'
+import { loadGarageMaintenanceSummary, loadMaintenance } from './maintenance'
 
 const vehicle = {
   id: 'fictional',
@@ -84,4 +84,26 @@ it('uses linked completions and overrides only after explicit activation', async
     last_completed_mileage: 30000,
     next_interval_km: 6000,
   })
+})
+
+it('loads garage maintenance summary without queries when vehicle list is empty', async () => {
+  const summary = await loadGarageMaintenanceSummary([])
+  expect(summary).toEqual({ overdue: 0, dueSoon: 0 })
+  expect(api.from).not.toHaveBeenCalled()
+})
+
+it('aggregates garage maintenance summary across vehicles using loaded items', async () => {
+  vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')
+  api.from.mockImplementation((table) =>
+    query(
+      table === 'vehicle_maintenance_items'
+        ? [{ ...baseline, enabled: true }]
+        : [],
+    ),
+  )
+  // baseline with enabled: true has next mileage: 10000 + 10000 = 20000.
+  // vehicle has mileage: 50000. 50000 >= 20000 -> overdue!
+  const summary = await loadGarageMaintenanceSummary([vehicle])
+  expect(summary).toEqual({ overdue: 1, dueSoon: 0 })
+  expect(api.from).toHaveBeenCalledWith('vehicle_maintenance_items')
 })
