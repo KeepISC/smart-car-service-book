@@ -10,6 +10,10 @@ const mockVehicles = vi.hoisted(() => ({
 const mockMaintenance = vi.hoisted(() => ({
   loadGarageMaintenanceSummary: vi.fn(),
 }))
+vi.mock('../services/shopReminders', () => ({
+  listShopMaintenanceReminders: async () => [],
+  setShopMaintenanceReminderState: vi.fn(),
+}))
 
 vi.mock('../services/vehicles', () => ({
   listVehicles: mockVehicles.listVehicles,

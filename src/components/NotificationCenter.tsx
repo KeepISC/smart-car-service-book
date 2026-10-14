@@ -14,6 +14,8 @@ import { loadGarageMaintenanceSummary } from '../services/maintenance'
 import { listVehicles } from '../services/vehicles'
 import { useLocalDate } from '../hooks/useLocalDate'
 import { useMaintenanceRefresh } from '../hooks/useMaintenanceRefresh'
+import { useShopReminders } from '../hooks/useShopReminders'
+import { ShopReminderNotifications } from './ShopReminderNotifications'
 
 function dateLabel(value: string) {
   return new Date(`${value}T00:00:00`).toLocaleDateString(undefined, {
@@ -65,6 +67,11 @@ export function NotificationCenter({
     propLoading !== undefined
   const { revision, reload } = useMaintenanceRefresh(!controlled)
   const load = propReload ?? reload
+  const shopReminders = useShopReminders(
+    !controlled,
+    revision,
+    location.pathname + location.search,
+  )
 
   // Load on mount and route changes (e.g. after adding/editing/deleting a vehicle)
   useEffect(() => {
@@ -137,7 +144,8 @@ export function NotificationCenter({
   }, [isOpen])
 
   const alerts = summary?.alerts ?? []
-  const count = alerts.length
+  const count =
+    alerts.length + shopReminders.reminders.filter((row) => !row.read_at).length
 
   const handleToggle = () => {
     setIsOpen((prev) => !prev)
@@ -206,6 +214,13 @@ export function NotificationCenter({
           </div>
 
           <div className="notification-panel-body">
+            {!controlled && (
+              <ShopReminderNotifications
+                {...shopReminders}
+                reload={reload}
+                onNavigate={handleItemClick}
+              />
+            )}
             {loading ? (
               <div className="notification-status-state" role="status">
                 <LoaderCircle
@@ -229,7 +244,7 @@ export function NotificationCenter({
                   </button>
                 </div>
               </div>
-            ) : count === 0 ? (
+            ) : alerts.length === 0 ? (
               <div className="notification-empty" role="status">
                 <CheckCircle2 size={24} aria-hidden="true" />
                 <div>

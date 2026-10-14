@@ -65,6 +65,22 @@ jobs:
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-vehicle-transfer-concurrency.mjs
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610130003_vehicle_transfer_preview.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_transfer_preview.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140001_repair_shops.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/repair_shops.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-repair-shop-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140002_repair_shop_connections.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/repair_shop_connections.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-shop-connection-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140003_platform_shop_administration.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/platform_shop_administration.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-platform-shop-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140004_shop_maintenance_reminders.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/shop_maintenance_reminders.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-shop-reminder-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140005_shop_discovery_administration.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610140006_shop_review_data_sharing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/shop_backend_integration.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-shop-backend-integration-concurrency.mjs
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15

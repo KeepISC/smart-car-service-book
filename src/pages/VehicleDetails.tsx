@@ -12,6 +12,7 @@ import type { Vehicle } from '../types/vehicle'
 import { MaintenancePanel } from '../components/MaintenancePanel'
 import { MileageHistoryPanel } from '../components/MileageHistoryPanel'
 import { TransferOwnershipPanel } from '../components/TransferOwnershipPanel'
+import { RepairShopConnections } from '../components/RepairShopConnections'
 import { isServiceHistoryEnabled } from '../config/features'
 import { useMaintenanceRefresh } from '../hooks/useMaintenanceRefresh'
 const ServiceHistoryPanel = lazy(async () => ({
@@ -344,6 +345,7 @@ function VehicleDetailsView() {
                 vehicleId={vehicle.id}
                 refreshTrigger={mileageHistoryKey}
               />
+              <RepairShopConnections key={vehicle.id} vehicle={vehicle} />
               {transferOpen ? (
                 <TransferOwnershipPanel
                   vehicle={vehicle}

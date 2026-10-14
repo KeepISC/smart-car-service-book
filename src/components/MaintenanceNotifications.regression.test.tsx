@@ -34,7 +34,9 @@ it('recovers on refresh and ignores an older notification response', async () =>
   )
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
   await waitFor(() => expect(api.summary).toHaveBeenCalledTimes(2))
-  expect(screen.getByRole('status')).toHaveTextContent('Loading notifications')
+  expect(
+    screen.getByText('Loading notifications…').closest('[role="status"]'),
+  ).toBeInTheDocument()
   api.summary.mockResolvedValueOnce({ overdue: 0, dueSoon: 0, alerts: [] })
   fireEvent(window, new Event('app:maintenance-change'))
   await screen.findByText('All maintenance is up to date')

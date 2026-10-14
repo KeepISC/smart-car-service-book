@@ -370,7 +370,7 @@ footer {
   gap: 5px;
   color: var(--muted);
   font-size: 10px;
-  min-width: 70px;
+  min-width: 54px;
   min-height: 44px;
 }
 .bottom-nav a.active {
@@ -2061,5 +2061,70 @@ select:focus-visible {
   gap: 8px;
 }
 .transfer-invite input {
+  width: 100%;
+}
+
+.shop-request {
+  display: grid;
+  gap: 8px;
+  max-width: 480px;
+}
+.shop-request input,
+.shop-request select {
+  width: 100%;
+}
+.shop-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.shop-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.shop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.shop-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.shop-vehicles {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.audit-state {
+  overflow-x: auto;
+  max-width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  font-size: 0.8rem;
+}
+.platform-shop {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.platform-admin textarea {
   width: 100%;
 }

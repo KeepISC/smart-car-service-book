@@ -5,13 +5,19 @@ import {
   Settings,
   Plus,
   ArrowUpRight,
+  Wrench,
+  ShieldCheck,
+  ClipboardList,
 } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 import { NotificationCenter } from './NotificationCenter'
 import { useOwnershipWatch } from '../hooks/useOwnershipWatch'
+import { usePlatformAdministrator } from '../hooks/usePlatformAdministrator'
 export function Layout() {
   const { session } = useAuth()
   useOwnershipWatch(Boolean(session))
+  // Navigation visibility only; the server authorizes every platform action.
+  const platformAdmin = usePlatformAdministrator(Boolean(session))
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -29,6 +35,20 @@ export function Layout() {
             <LayoutGrid size={20} />
             Garage
           </NavLink>
+          <NavLink to="/shops">
+            <Wrench size={20} />
+            Repair shop
+          </NavLink>
+          <NavLink to="/workshop">
+            <ClipboardList size={20} />
+            Shop customers
+          </NavLink>
+          {platformAdmin && (
+            <NavLink to="/platform">
+              <ShieldCheck size={20} />
+              Platform
+            </NavLink>
+          )}
           <NavLink to="/settings">
             <Settings size={20} />
             Settings
@@ -78,10 +98,20 @@ export function Layout() {
           <LayoutGrid size={21} />
           Garage
         </NavLink>
-        <NavLink to="/vehicles/new">
-          <Plus size={21} />
-          Add vehicle
+        <NavLink to="/shops">
+          <Wrench size={21} />
+          Repair shop
         </NavLink>
+        <NavLink to="/workshop">
+          <ClipboardList size={21} />
+          Shop customers
+        </NavLink>
+        {platformAdmin && (
+          <NavLink to="/platform">
+            <ShieldCheck size={21} />
+            Platform
+          </NavLink>
+        )}
         <NavLink to="/settings">
           <Settings size={21} />
           Settings

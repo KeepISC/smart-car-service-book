@@ -15,6 +15,10 @@ import { Auth } from './pages/Auth'
 import { VehicleForm } from './pages/VehicleForm'
 import { VehicleDetails } from './pages/VehicleDetails'
 import { TransferInvitation } from './pages/TransferInvitation'
+import { ShopConnection } from './pages/ShopConnection'
+import { ShopInvitations } from './pages/ShopInvitations'
+import { PlatformAdmin } from './pages/PlatformAdmin'
+import { ShopCrm } from './pages/ShopCrm'
 import { Settings } from './pages/Settings'
 import type { Theme } from './pages/Settings'
 import { authService } from './services/auth'
@@ -31,9 +35,10 @@ function Protected() {
         </Link>
       </>
     )
-  // Sign in in place on /transfer so the invitation #fragment is not lost.
+  // Sign in in place on invitation routes so the #fragment is not lost.
   if (authService.available && !session)
-    return location.pathname === '/transfer' ? (
+    return location.pathname === '/transfer' ||
+      location.pathname === '/shop-connections' ? (
       <Auth />
     ) : (
       <Navigate to="/login" replace />
@@ -75,6 +80,10 @@ export default function App() {
             <Route index element={<Garage />} />
             <Route path="vehicles/new" element={<VehicleForm key="new" />} />
             <Route path="transfer" element={<TransferInvitation />} />
+            <Route path="shop-connections" element={<ShopConnection />} />
+            <Route path="shops" element={<ShopInvitations />} />
+            <Route path="platform" element={<PlatformAdmin />} />
+            <Route path="workshop" element={<ShopCrm />} />
             <Route path="vehicles/:id" element={<VehicleDetails />} />
             <Route
               path="vehicles/:id/edit"
