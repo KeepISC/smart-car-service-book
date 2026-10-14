@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+} from 'react-router-dom'
 import { AuthProvider, useAuth } from './components/AuthProvider'
 import { Layout } from './components/Layout'
 import { Loading, ErrorState } from './components/States'
@@ -7,11 +14,13 @@ import { Garage } from './pages/Garage'
 import { Auth } from './pages/Auth'
 import { VehicleForm } from './pages/VehicleForm'
 import { VehicleDetails } from './pages/VehicleDetails'
+import { TransferInvitation } from './pages/TransferInvitation'
 import { Settings } from './pages/Settings'
 import type { Theme } from './pages/Settings'
 import { authService } from './services/auth'
 function Protected() {
   const { session, loading, error } = useAuth()
+  const location = useLocation()
   if (loading) return <Loading />
   if (error)
     return (
@@ -22,7 +31,13 @@ function Protected() {
         </Link>
       </>
     )
-  if (authService.available && !session) return <Navigate to="/login" replace />
+  // Sign in in place on /transfer so the invitation #fragment is not lost.
+  if (authService.available && !session)
+    return location.pathname === '/transfer' ? (
+      <Auth />
+    ) : (
+      <Navigate to="/login" replace />
+    )
   // Discard all mounted user-data state when the verified application owner changes.
   return <Layout key={session?.user.id ?? 'preview'} />
 }
@@ -59,6 +74,7 @@ export default function App() {
           <Route element={<Protected />}>
             <Route index element={<Garage />} />
             <Route path="vehicles/new" element={<VehicleForm key="new" />} />
+            <Route path="transfer" element={<TransferInvitation />} />
             <Route path="vehicles/:id" element={<VehicleDetails />} />
             <Route
               path="vehicles/:id/edit"

@@ -74,3 +74,20 @@ export async function deleteServiceVisit(vehicleId: string, visitId: string) {
   if (error) throw error
   notifyMaintenanceChange()
 }
+
+export async function setServiceVisitTransferPrivacy(
+  vehicleId: string,
+  visitId: string,
+  privateOnTransfer: boolean,
+) {
+  requireServiceHistory()
+  if (typeof privateOnTransfer !== 'boolean')
+    throw new Error('Choose whether this visit is private on transfer.')
+  const { error } = await client().rpc('set_service_visit_transfer_privacy', {
+    p_vehicle_id: vehicleId,
+    p_visit_id: visitId,
+    p_private: privateOnTransfer,
+  })
+  if (error) throw error
+  notifyMaintenanceChange()
+}

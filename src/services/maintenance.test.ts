@@ -9,10 +9,12 @@ const mock = vi.hoisted(() => {
     update: vi.fn().mockReturnValue(query),
     insert: vi.fn().mockReturnValue(query),
     delete: vi.fn().mockReturnValue(query),
+    rpc: vi.fn(),
   }
 })
 vi.mock('./supabase', () => ({
   client: () => ({
+    rpc: mock.rpc,
     from: () => ({
       update: mock.update,
       insert: mock.insert,
@@ -25,6 +27,7 @@ const vehicle = { id: 'fictional-vehicle', mileage: 10000 } as Vehicle
 beforeEach(() => {
   vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'true')
   vi.clearAllMocks()
+  mock.rpc.mockResolvedValue({ data: null, error: null })
   mock.query.select.mockResolvedValue({
     data: [{ id: 'fictional-item' }],
     error: null,
@@ -38,7 +41,10 @@ it('notifies alerts only after successful maintenance mutations', async () => {
     await saveMaintenance(vehicle, [starterSchedule[0]])
     await removeMaintenance(vehicle.id, 'fictional-item')
     expect(listener).toHaveBeenCalledTimes(2)
-    mock.query.select.mockResolvedValue({ data: [], error: null })
+    mock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: new Error('The maintenance item is unavailable.'),
+    })
     await expect(removeMaintenance(vehicle.id, 'unavailable')).rejects.toThrow()
     expect(listener).toHaveBeenCalledTimes(2)
   } finally {
@@ -80,12 +86,28 @@ it('propagates an RLS-denied unauthorized insert', async () => {
 })
 it('rejects edits and deletes hidden by owner isolation', async () => {
   mock.query.select.mockResolvedValue({ data: [], error: null })
+  mock.rpc.mockResolvedValueOnce({
+    data: null,
+    error: new Error('The maintenance item is unavailable.'),
+  })
   await expect(
     saveMaintenance(vehicle, [starterSchedule[0]], 'other-owner-item'),
   ).rejects.toThrow('authorized')
   await expect(
     removeMaintenance(vehicle.id, 'other-owner-item'),
   ).rejects.toThrow('unavailable')
+})
+
+it('deletes schedules through the parent-first database RPC', async () => {
+  await removeMaintenance(vehicle.id, 'fictional-item')
+  expect(mock.rpc).toHaveBeenCalledExactlyOnceWith(
+    'delete_vehicle_maintenance_item',
+    {
+      p_vehicle_id: vehicle.id,
+      p_item_id: 'fictional-item',
+    },
+  )
+  expect(mock.delete).not.toHaveBeenCalled()
 })
 it('rejects invalid intervals before writing', async () => {
   await expect(

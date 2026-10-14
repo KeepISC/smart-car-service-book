@@ -60,6 +60,11 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610130001_vehicle_mileage_history.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_mileage_history.sql
           SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-vehicle-mileage-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610130002_vehicle_ownership_transfer.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_ownership_transfer.sql
+          SCSB_DISPOSABLE_DATABASE_TEST=true node scripts/test-vehicle-transfer-concurrency.mjs
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610130003_vehicle_transfer_preview.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/vehicle_transfer_preview.sql
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 15

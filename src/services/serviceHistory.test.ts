@@ -23,6 +23,7 @@ import {
   deleteServiceVisit,
   loadServiceHistory,
   saveServiceVisit,
+  setServiceVisitTransferPrivacy,
 } from './serviceHistory'
 
 const vehicle = {
@@ -194,4 +195,25 @@ it('loads history beyond the API page limit rather than dropping older linked wo
     [0, 499],
     [500, 999],
   ])
+})
+
+it('changes transfer privacy through the owner-checked RPC and preserves errors', async () => {
+  await setServiceVisitTransferPrivacy(vehicle.id, 'fictional-visit', true)
+  expect(mock.rpc).toHaveBeenLastCalledWith(
+    'set_service_visit_transfer_privacy',
+    {
+      p_vehicle_id: vehicle.id,
+      p_visit_id: 'fictional-visit',
+      p_private: true,
+    },
+  )
+  const error = new Error('Access denied')
+  mock.rpc.mockResolvedValueOnce({ data: null, error })
+  await expect(
+    setServiceVisitTransferPrivacy(vehicle.id, 'fictional-visit', false),
+  ).rejects.toThrow('Access denied')
+  vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'false')
+  await expect(
+    setServiceVisitTransferPrivacy(vehicle.id, 'fictional-visit', false),
+  ).rejects.toThrow('not enabled')
 })

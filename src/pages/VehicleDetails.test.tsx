@@ -44,6 +44,29 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
+it('removes open vehicle and mileage screens when ownership is lost and supports retry', async () => {
+  render(
+    <MemoryRouter initialEntries={['/vehicles/fictional']}>
+      <Routes>
+        <Route path="/vehicles/:id" element={<VehicleDetails />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  await screen.findByRole('heading', { name: 'Vehicle overview' })
+  fireEvent.click(screen.getByRole('button', { name: 'Edit current mileage' }))
+  mocks.getVehicle.mockRejectedValueOnce({ code: 'PGRST116' })
+  fireEvent(window, new Event('app:vehicle-change'))
+  fireEvent(window, new Event('app:ownership-change'))
+  expect(screen.queryByLabelText('Current mileage in km')).toBeNull()
+  await screen.findByText(
+    'This vehicle is unavailable or you do not have access.',
+  )
+  expect(screen.queryByRole('heading', { name: 'Vehicle overview' })).toBeNull()
+  expect(screen.queryByRole('region', { name: 'Mileage history' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: /Try again/i }))
+  await screen.findByRole('heading', { name: 'Vehicle overview' })
+})
+
 it('marks only Service history pressed when the history section is open', async () => {
   vi.stubEnv('VITE_SERVICE_HISTORY_ENABLED', 'true')
   render(

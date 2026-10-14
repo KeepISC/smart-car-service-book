@@ -22,8 +22,28 @@ function Account() {
 }
 beforeEach(() => {
   vi.resetAllMocks()
+  sessionStorage.clear()
   api.getSession.mockResolvedValue(null)
   api.subscribe.mockReturnValue(api.unsubscribe)
+})
+
+it('preserves transfer recovery on restoration but clears it when the account changes', async () => {
+  sessionStorage.setItem('scsb:transfer:recipient', 'a'.repeat(64))
+  api.getSession.mockResolvedValue({ user: { id: 'fictional-a' } })
+  render(
+    <AuthProvider>
+      <Account />
+    </AuthProvider>,
+  )
+  await screen.findByText('fictional-a')
+  expect(sessionStorage.length).toBe(1)
+  await act(async () =>
+    api.subscribe.mock.calls[0][0]({ user: { id: 'fictional-b' } }),
+  )
+  expect(sessionStorage.length).toBe(0)
+  sessionStorage.setItem('scsb:transfer:recipient', 'b'.repeat(64))
+  await act(async () => api.subscribe.mock.calls[0][0](null))
+  expect(sessionStorage.length).toBe(0)
 })
 it('restores a persistent session and unsubscribes on unmount', async () => {
   api.getSession.mockResolvedValue({ user: { id: 'fictional-user' } })

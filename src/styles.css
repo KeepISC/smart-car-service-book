@@ -2033,3 +2033,33 @@ select:focus-visible {
     gap: 3px;
   }
 }
+
+.transfer-visits {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.transfer-visit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.transfer-private {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.transfer-invite {
+  display: grid;
+  gap: 8px;
+}
+.transfer-invite input {
+  width: 100%;
+}

@@ -8,8 +8,10 @@ import {
 } from 'lucide-react'
 import { useAuth } from './AuthProvider'
 import { NotificationCenter } from './NotificationCenter'
+import { useOwnershipWatch } from '../hooks/useOwnershipWatch'
 export function Layout() {
   const { session } = useAuth()
+  useOwnershipWatch(Boolean(session))
   return (
     <div className="app-shell">
       <aside className="sidebar">

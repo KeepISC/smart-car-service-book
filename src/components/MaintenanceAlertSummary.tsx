@@ -46,6 +46,12 @@ export function MaintenanceAlertSummary({
   useEffect(() => {
     if (vehiclesLoading || vehiclesError) return
     let alive = true
+    const conceal = () => {
+      alive = false
+      setSummary(null)
+      setRetrying(true)
+    }
+    window.addEventListener('app:ownership-change', conceal)
     Promise.resolve()
       .then(() => {
         if (!alive) return null
@@ -70,6 +76,7 @@ export function MaintenanceAlertSummary({
       })
     return () => {
       alive = false
+      window.removeEventListener('app:ownership-change', conceal)
     }
   }, [vehicles, vehiclesLoading, vehiclesError, today, revision])
 

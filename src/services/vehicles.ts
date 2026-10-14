@@ -122,13 +122,28 @@ const inFlightMileageHistory = new Map<
   { ownerId: string; promise: Promise<VehicleMileageHistory[]> }
 >()
 
-function notifyVehicleChange(vehicleId: string) {
+export function notifyVehicleChange(vehicleId: string) {
   // Refreshes must not join reads started before the committed vehicle change.
   inFlightVehicles = null
   inFlightMileageHistory.delete(vehicleId)
   notifyMaintenanceChange()
   if (typeof window !== 'undefined')
     window.dispatchEvent(new Event('app:vehicle-change'))
+}
+
+export function invalidateVehicleReads() {
+  inFlightVehicles = null
+  inFlightMileageHistory.clear()
+}
+
+export async function loadVehicleOwnershipSnapshot(): Promise<
+  { id: string; ownership_epoch: number }[]
+> {
+  const { data, error } = await client()
+    .from('vehicles')
+    .select('id, ownership_epoch')
+  if (error) throw error
+  return data ?? []
 }
 
 export async function loadVehicleMileageHistory(

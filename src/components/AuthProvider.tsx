@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { AuthSession } from '../types/auth'
 import { authService } from '../services/auth'
 import { authenticationErrorMessage } from '../services/authErrors'
+import { clearTransferSession } from '../services/transferSession'
 const AuthContext = createContext<{
   session: AuthSession | null
   loading: boolean
@@ -17,8 +18,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let alive = true
     // A new auth event takes precedence over an older session-restoration request.
     let sessionChanged = false
+    let ownerId: string | undefined
     const unsubscribe = authService.subscribe((next) => {
       if (alive) {
+        if (ownerId && ownerId !== next?.user.id) clearTransferSession()
+        ownerId = next?.user.id
         sessionChanged = true
         setSession(next)
         setError('')
@@ -29,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getSession()
       .then((restored) => {
         if (alive && !sessionChanged) {
+          ownerId = restored?.user.id
           setSession(restored)
           setLoading(false)
         }

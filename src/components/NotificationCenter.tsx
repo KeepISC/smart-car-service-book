@@ -70,6 +70,12 @@ export function NotificationCenter({
   useEffect(() => {
     if (controlled) return
     let alive = true
+    const conceal = () => {
+      alive = false
+      setInternalSummary(null)
+      setInternalLoading(true)
+    }
+    window.addEventListener('app:ownership-change', conceal)
     const vehiclePromise = Promise.resolve().then(() => {
       if (!alive) return []
       setInternalLoading(true)
@@ -98,6 +104,7 @@ export function NotificationCenter({
       })
     return () => {
       alive = false
+      window.removeEventListener('app:ownership-change', conceal)
     }
   }, [location.pathname, location.search, controlled, revision, today])
 

@@ -115,3 +115,25 @@ it('does not navigate an old save into the newly selected vehicle', async () => 
   await act(async () => complete(vehicle))
   expect(router.state.location.pathname).toBe('/vehicles/b/edit')
 })
+
+it('removes an open draft after losing ownership and ignores an older save result', async () => {
+  let complete!: (value: object) => void
+  api.saveVehicle.mockReturnValueOnce(
+    new Promise((resolve) => {
+      complete = resolve
+    }),
+  )
+  const router = openForm()
+  await screen.findByDisplayValue('Fictional A')
+  fireEvent.click(screen.getByRole('button', { name: 'Save vehicle' }))
+  api.getVehicle.mockRejectedValueOnce({ code: 'PGRST116' })
+  fireEvent(window, new Event('app:vehicle-change'))
+  fireEvent(window, new Event('app:ownership-change'))
+  expect(screen.queryByDisplayValue('Fictional A')).toBeNull()
+  await screen.findByText(
+    'This vehicle is unavailable or you do not have access.',
+  )
+  expect(screen.queryByRole('button', { name: 'Save vehicle' })).toBeNull()
+  await act(async () => complete(vehicle))
+  expect(router.state.location.pathname).toBe('/vehicles/a/edit')
+})

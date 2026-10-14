@@ -6,6 +6,10 @@ import path from 'node:path'
 import net from 'node:net'
 import { isDeepStrictEqual } from 'node:util'
 import pg from 'pg'
+import {
+  preparePublicSchemaRestore,
+  readRecoverySchemaSecurity,
+} from '../scripts/recovery-public-schema.mjs'
 const major = process.env.SCSB_RECOVERY_POSTGRES_MAJOR ?? '18'
 assert.ok(
   ['17', '18'].includes(major),
@@ -47,6 +51,9 @@ if (manifest) {
 const hasServiceHistory = Boolean(
   manifest?.counts?.['public.service_visits'] !== undefined,
 )
+const hasMileageHistory = Boolean(
+  manifest?.counts?.['public.vehicle_mileage_history'] !== undefined,
+)
 const checksum = async () =>
   createHash('sha256')
     .update(await readFile(archive))
@@ -76,7 +83,7 @@ const tables = [
     /^COPY ([\w.]+) \(([^\n]+)\) FROM stdin;\n([\s\S]*?)^\\\.$/gm,
   ),
 ]
-assert.equal(tables.length, hasServiceHistory ? 11 : 9)
+assert.equal(tables.length, hasMileageHistory ? 12 : hasServiceHistory ? 11 : 9)
 const expectedCounts = manifest?.counts ?? {
   'public.vehicles': 1,
   'public.vehicle_maintenance_items': 5,
@@ -141,7 +148,6 @@ try {
   console.log('PostgreSQL', version)
   await client.query("set timezone='UTC'")
   await client.query(`
-    drop schema public;
     create role anon nologin;
     create role authenticated nologin;
     create role service_role nologin bypassrls;
@@ -179,6 +185,8 @@ try {
   })
   // Keep owners and ACLs; do not use --clean, --create or --no-owner.
   stage = 'archive restore'
+  const restoreList = path.join(directory, 'restore.list')
+  await preparePublicSchemaRestore(client, archiveList, restoreList)
   const output = restore(
     [
       '--host=127.0.0.1',
@@ -187,12 +195,34 @@ try {
       '--dbname=recovery_test',
       '--exit-on-error',
       '--single-transaction',
+      `--use-list=${restoreList}`,
       archive,
     ],
     env,
   )
   assert.equal(output.trim(), '')
   console.log('PASS transactional custom-archive restore')
+  if (process.env.SCSB_RECOVERY_ACL_REFERENCE) {
+    stage = 'schema ACL/default privileges and database owner mapping'
+    const reference = JSON.parse(
+      await readFile(process.env.SCSB_RECOVERY_ACL_REFERENCE, 'utf8'),
+    )
+    assert.equal(reference.project, manifest.project)
+    assert.equal(reference.backup_sha256, expectedHash)
+    assert.deepEqual(
+      reference.security.schemas,
+      manifest.catalog.schemas,
+      'Read-only source schema ACLs differ from the captured backup',
+    )
+    assert.deepEqual(
+      await readRecoverySchemaSecurity(client),
+      reference.security,
+      'Restored schema ACLs/default privileges/database owner mapping differ',
+    )
+    console.log(
+      'PASS exact schema ACLs, all application default privileges and pg_database_owner mapping',
+    )
+  }
   if (manifest) {
     stage = 'source snapshot schema equality'
     const restored = (
@@ -327,10 +357,10 @@ try {
           "select to_regclass('public.vehicle_mileage_history') is null absent",
         )
       ).rows[0].absent,
-      true,
+      !hasMileageHistory,
     )
     console.log(
-      'PASS source snapshot schema, owners, table/column/function ACLs, all row fingerprints and five predecessor migration records; Task 5 remains unapplied',
+      `PASS source snapshot schema, owners, schema/table/column/function ACLs, all row fingerprints and ${manifest.history.length} recorded migrations`,
     )
     stage = 'ACL comparison regression'
     await client.query('begin')
@@ -442,19 +472,19 @@ try {
     await scalar(
       "select count(*)::int n from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname in ('public','app_private')",
     ),
-    hasServiceHistory ? 8 : 5,
+    hasMileageHistory ? 10 : hasServiceHistory ? 8 : 5,
   )
   assert.equal(
     await scalar(
       "select count(*)::int n from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace s on s.oid=c.relnamespace where s.nspname='public' and not t.tgisinternal and t.tgenabled='O'",
     ),
-    hasServiceHistory ? 7 : 4,
+    hasMileageHistory ? 8 : hasServiceHistory ? 7 : 4,
   )
   assert.equal(
     await scalar(
       "select count(*)::int n from pg_policies where schemaname in ('public','app_private')",
     ),
-    hasServiceHistory ? 12 : 10,
+    hasMileageHistory ? 13 : hasServiceHistory ? 12 : 10,
   )
   const functionNames = (
     await client.query(
@@ -469,6 +499,9 @@ try {
       'public.set_vehicle_updated_at',
       'public.validate_maintenance_completion',
       'public.validate_vehicle_mileage',
+      ...(hasMileageHistory
+        ? ['public.record_vehicle_mileage', 'public.update_vehicle_mileage']
+        : []),
       ...(hasServiceHistory
         ? [
             'public.delete_service_visit',
@@ -504,7 +537,7 @@ try {
     await scalar(
       "select count(*)::int n from pg_class c join pg_namespace s on s.oid=c.relnamespace where s.nspname in ('public','app_private') and c.relkind='r' and c.relrowsecurity and c.relforcerowsecurity",
     ),
-    hasServiceHistory ? 10 : 8,
+    hasMileageHistory ? 11 : hasServiceHistory ? 10 : 8,
   )
   assert.equal(
     await scalar(
@@ -528,7 +561,7 @@ try {
     await scalar(
       "select count(*)::int n from pg_proc p join pg_namespace s on s.oid=p.pronamespace where s.nspname in ('public','app_private') and p.prosecdef and p.proconfig @> array['search_path=\"\"']",
     ),
-    hasServiceHistory ? 4 : 2,
+    hasMileageHistory ? 5 : hasServiceHistory ? 4 : 2,
   )
   const privileges = (
     await client.query(`select

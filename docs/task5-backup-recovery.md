@@ -47,6 +47,13 @@ $env:SCSB_RECOVERY_POSTGRES_MAJOR = '17'
 node docs/verify-isolated-recovery.mjs
 ```
 
+The verifier also supports a pre-Task-6 manifest containing twelve tables and six
+migrations through `202610130001`. It restores the archive only; it never applies
+pending migrations. For an independently captured read-only schema/default-grant
+reference, optionally set `SCSB_RECOVERY_ACL_REFERENCE` to its JSON path. That
+reference must identify the same project and backup SHA-256 and have schema ACLs
+identical to the snapshot manifest before comparison with the restored database.
+
 The helper validates archive/manifest/sidecar SHA-256 before creating a unique
 loopback cluster and verifies its data directory. It prepares the Task 3 local role
 and auth-function dependencies, then runs `pg_restore --exit-on-error
@@ -139,3 +146,54 @@ archive: it contains neither the mileage-history schema nor records created afte
 its snapshot. Production recovery would need separate authorization, reconciliation
 of newer records and a reviewed procedure for restoring the pre-migration archive
 and reapplying later migrations.
+
+## Task 6 public-schema ACL resolution — 2026-10-14
+
+The existing pre-Task-6 archive was reused without alteration or a new backup.
+The failed assertion detected a real restore-process defect: the helper dropped
+PostgreSQL's built-in `public` schema. `pg_dump` emits schema ACL changes relative
+to that schema's initial permissions, so recreating it with `CREATE SCHEMA public`
+lost `PUBLIC USAGE`, recorded as `=U/pg_database_owner`.
+
+Both source and restored schema owners were `pg_database_owner`. The owner grant
+`pg_database_owner=UC/pg_database_owner` and explicit USAGE grants to `postgres`,
+`anon`, `authenticated` and `service_role` matched. Only the PUBLIC grant differed.
+Both database owners were `postgres`, with its implicit membership in
+`pg_database_owner` confirmed. The six archived default-privilege entries for
+`postgres` and `supabase_admin` in `public` also matched the restored database;
+they cover tables, functions and sequences and were not the cause of failure.
+
+[recovery-public-schema.mjs](../scripts/recovery-public-schema.mjs) now validates
+the untouched built-in schema's owner and complete initial ACL, then prepares a
+`pg_restore --use-list` selection omitting only its `SCHEMA` creation entry.
+All archived ACL, comment and default-privilege entries remain selected. Owners
+and ACLs are retained, and the complete source/restored permission comparison
+remains strict. An unexpected bootstrap ACL or archived schema owner aborts.
+Do not add grants manually or ignore a mismatch to make restoration pass.
+
+Verification passed on disposable PostgreSQL 17.10 using `pg_restore` 18.6:
+
+- Exact schema owners/ACLs, table/column/function ACLs, RLS, constraints, indexes,
+  functions, triggers and policies matched the saved source manifest.
+- All twelve table counts/fingerprints and typed bidirectional row comparisons
+  matched, including all six migration-ledger records. Task 6 remained unapplied.
+- A narrowly scoped read-only source check confirmed the namespace ACLs were
+  unchanged since backup and compared all six application default-privilege
+  entries and database-owner mapping exactly with the corrected restore.
+- Archive, manifest and sidecar SHA-256 remained unchanged. Both disposable
+  clusters were stopped and their checked directories removed.
+
+The focused fictional regression reproduces the original failure, verifies the
+corrected restore, detects an extra CREATE grant/altered bootstrap, and confirms
+that an archived PUBLIC USAGE revocation remains revoked. Run it with the existing
+local PostgreSQL tools:
+
+```powershell
+node scripts/test-recovery-public-schema.mjs
+```
+
+The source manifest includes namespace ACLs but not default privileges; the latter
+were compared with the archive and a current read-only source reference, not a
+claimed backup-time snapshot. This remains application-data recovery with local
+authentication shims, not managed Supabase recovery. No production writes, Task 6
+migrations, frontend deployment or application test rerun occurred.

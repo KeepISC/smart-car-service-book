@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, CarFront, Bike, Trash2 } from 'lucide-react'
 import {
@@ -11,7 +11,9 @@ import { ErrorState, Loading } from '../components/States'
 import type { Vehicle } from '../types/vehicle'
 import { MaintenancePanel } from '../components/MaintenancePanel'
 import { MileageHistoryPanel } from '../components/MileageHistoryPanel'
+import { TransferOwnershipPanel } from '../components/TransferOwnershipPanel'
 import { isServiceHistoryEnabled } from '../config/features'
+import { useMaintenanceRefresh } from '../hooks/useMaintenanceRefresh'
 const ServiceHistoryPanel = lazy(async () => ({
   default: (await import('../components/ServiceHistoryPanel'))
     .ServiceHistoryPanel,
@@ -39,23 +41,47 @@ function VehicleDetailsView() {
   const [mileageSuccess, setMileageSuccess] = useState('')
   const [savingMileage, setSavingMileage] = useState(false)
   const [mileageHistoryKey, setMileageHistoryKey] = useState(0)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const { revision, reload } = useMaintenanceRefresh()
+  const generation = useRef(0)
   useEffect(() => {
     let alive = true
+    const request = ++generation.current
     getVehicle(id!)
       .then((v) => {
-        if (alive) setVehicle(v)
+        if (alive && request === generation.current) {
+          setVehicle(v)
+          setError('')
+          setMileageHistoryKey((value) => value + 1)
+        }
       })
       .catch(() => {
-        if (alive)
+        if (alive && request === generation.current) {
+          setVehicle(null)
+          setTransferOpen(false)
+          setEditingMileage(false)
           setError('This vehicle is unavailable or you do not have access.')
+        }
       })
       .finally(() => {
-        if (alive) setLoading(false)
+        if (alive && request === generation.current) setLoading(false)
       })
     return () => {
       alive = false
     }
-  }, [id])
+  }, [id, revision])
+  useEffect(() => {
+    const conceal = () => {
+      generation.current++
+      setVehicle(null)
+      setTransferOpen(false)
+      setConfirm(false)
+      setEditingMileage(false)
+      setLoading(true)
+    }
+    window.addEventListener('app:ownership-change', conceal)
+    return () => window.removeEventListener('app:ownership-change', conceal)
+  }, [])
   async function remove() {
     setBusy(true)
     try {
@@ -102,10 +128,12 @@ function VehicleDetailsView() {
       return
     }
     setSavingMileage(true)
+    const request = generation.current
     setMileageError('')
     setMileageSuccess('')
     try {
       const updated = await updateVehicleMileage(vehicle, nextMileage)
+      if (request !== generation.current) return
       setVehicle(updated)
       setEditingMileage(false)
       setMileageSuccess('Vehicle mileage updated successfully.')
@@ -129,7 +157,7 @@ function VehicleDetailsView() {
         <ArrowLeft size={17} />
         Back to garage
       </Link>
-      {error && <ErrorState message={error} />}
+      {error && <ErrorState message={error} retry={reload} />}
       {vehicle && (
         <>
           <div className="page-heading">
@@ -173,10 +201,16 @@ function VehicleDetailsView() {
             )}
           </div>
           {maintenanceTab ? (
-            <MaintenancePanel key={vehicle.id} vehicle={vehicle} />
+            <MaintenancePanel
+              key={`${vehicle.id}:${revision}`}
+              vehicle={vehicle}
+            />
           ) : serviceHistoryTab ? (
             <Suspense fallback={<Loading />}>
-              <ServiceHistoryPanel key={vehicle.id} vehicle={vehicle} />
+              <ServiceHistoryPanel
+                key={`${vehicle.id}:${revision}`}
+                vehicle={vehicle}
+              />
             </Suspense>
           ) : (
             <>
@@ -310,6 +344,26 @@ function VehicleDetailsView() {
                 vehicleId={vehicle.id}
                 refreshTrigger={mileageHistoryKey}
               />
+              {transferOpen ? (
+                <TransferOwnershipPanel
+                  vehicle={vehicle}
+                  onClose={() => setTransferOpen(false)}
+                />
+              ) : (
+                <section className="panel">
+                  <h2>Transfer ownership</h2>
+                  <p className="muted">
+                    Invite another user to take over this vehicle.
+                  </p>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => setTransferOpen(true)}
+                  >
+                    Transfer ownership
+                  </button>
+                </section>
+              )}
               <section className="panel danger-zone">
                 <h2>Remove vehicle</h2>
                 <p className="muted">

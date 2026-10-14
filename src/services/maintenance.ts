@@ -162,13 +162,10 @@ export async function saveMaintenance(
   return data as MaintenanceItem[]
 }
 export async function removeMaintenance(vehicleId: string, id: string) {
-  const { data, error } = await client()
-    .from('vehicle_maintenance_items')
-    .delete()
-    .eq('id', id)
-    .eq('vehicle_id', vehicleId)
-    .select('id')
+  const { error } = await client().rpc('delete_vehicle_maintenance_item', {
+    p_vehicle_id: vehicleId,
+    p_item_id: id,
+  })
   if (error) throw error
-  if (!data?.length) throw new Error('The maintenance item is unavailable.')
   notifyMaintenanceChange()
 }

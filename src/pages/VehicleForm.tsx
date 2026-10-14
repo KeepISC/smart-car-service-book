@@ -7,6 +7,7 @@ import { authService } from '../services/auth'
 import { ErrorState, Loading } from '../components/States'
 import type { VehicleInput } from '../types/vehicle'
 import { MileageConsistencyError } from '../services/dataErrors'
+import { useMaintenanceRefresh } from '../hooks/useMaintenanceRefresh'
 const initial: VehicleInput = {
   type: 'car',
   make: '',
@@ -32,27 +33,49 @@ function VehicleFormView() {
   const [loadFailed, setLoadFailed] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const active = useRef(true)
+  const needsDraft = useRef(true)
+  const generation = useRef(0)
+  const { revision, reload } = useMaintenanceRefresh(Boolean(id))
   useEffect(() => {
     let alive = true
+    const request = ++generation.current
     active.current = true
     if (id)
       getVehicle(id)
         .then((v) => {
-          if (alive) setValue(v)
+          if (alive && request === generation.current) {
+            // Revalidate ownership without overwriting an open edit draft.
+            if (needsDraft.current) setValue(v)
+            needsDraft.current = false
+            setLoadFailed(false)
+            setError('')
+          }
         })
         .catch(() => {
-          if (alive) {
+          if (alive && request === generation.current) {
             setLoadFailed(true)
             setError('This vehicle is unavailable or you do not have access.')
           }
         })
         .finally(() => {
-          if (alive) setLoading(false)
+          if (alive && request === generation.current) setLoading(false)
         })
     return () => {
       alive = false
       active.current = false
     }
+  }, [id, revision])
+  useEffect(() => {
+    const conceal = () => {
+      if (!id) return
+      generation.current++
+      needsDraft.current = true
+      setValue(initial)
+      setLoadFailed(true)
+      setError('Checking vehicle access…')
+    }
+    window.addEventListener('app:ownership-change', conceal)
+    return () => window.removeEventListener('app:ownership-change', conceal)
   }, [id])
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,10 +92,11 @@ function VehicleFormView() {
     setErrors(validation)
     if (Object.keys(validation).length) return
     setBusy(true)
+    const request = generation.current
     setError('')
     try {
       const saved = await saveVehicle(normalized, id)
-      if (active.current)
+      if (active.current && request === generation.current)
         navigate(`/vehicles/${saved.id}${id ? '' : '?tab=maintenance'}`)
     } catch (failure) {
       if (!active.current) return
@@ -88,6 +112,15 @@ function VehicleFormView() {
     }
   }
   if (loading) return <Loading />
+  if (loadFailed)
+    return (
+      <>
+        <Link className="back-link" to="/">
+          Back to garage
+        </Link>
+        <ErrorState message={error} retry={reload} />
+      </>
+    )
   return (
     <>
       <Link to={id ? `/vehicles/${id}` : '/'} className="back-link">
@@ -104,7 +137,9 @@ function VehicleFormView() {
           <p>Start with the details that make it yours.</p>
         </div>
       </div>
-      {error && <ErrorState message={error} />}
+      {error && (
+        <ErrorState message={error} retry={loadFailed ? reload : undefined} />
+      )}
       {!authService.available && (
         <div className="notice">
           Connect Supabase to save vehicles. You can explore the form below.

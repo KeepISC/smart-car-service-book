@@ -28,6 +28,7 @@ export type ServiceOperation = ServiceOperationInput & {
 export type ServiceVisit = Omit<ServiceVisitInput, 'operations'> & {
   id: string
   vehicle_id: string
+  private_on_transfer?: boolean
   created_at: string
   updated_at: string
   operations: ServiceOperation[]

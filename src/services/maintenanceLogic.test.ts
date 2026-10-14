@@ -50,6 +50,37 @@ function completion(
   }
 }
 describe('maintenance calculations', () => {
+  it('keeps due calculations identical when private transfer content is redacted', () => {
+    const original = {
+      ...completion('private', '2028-01-31', 18000, 5000, 1),
+      notes: 'Private notes',
+      workshop_name: 'Private shop',
+      total_cost: 50,
+    }
+    const redacted = {
+      ...original,
+      notes: null,
+      workshop_name: null,
+      total_cost: null,
+      operations: original.operations.map((operation) => ({
+        ...operation,
+        operation_name: 'Private maintenance completion',
+        cost: null,
+      })),
+    }
+    const before = calculateMaintenance(
+      applyServiceHistory([item], [original])[0],
+      20000,
+      '2028-02-01',
+    )
+    const after = calculateMaintenance(
+      applyServiceHistory([item], [redacted])[0],
+      20000,
+      '2028-02-01',
+    )
+    expect(after).toEqual(before)
+    expect(after).toMatchObject({ nextDate: '2028-02-29', nextMileage: 23000 })
+  })
   it('uses the latest service completion and its one-time interval overrides', () => {
     const older = completion('older', '2025-02-20', 22000, 5000, 6)
     const latest = completion('latest', '2025-03-01', 23000, 15000, null)
