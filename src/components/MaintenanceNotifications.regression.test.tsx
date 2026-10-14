@@ -11,6 +11,10 @@ vi.mock('../services/vehicles', () => ({ listVehicles: api.list }))
 vi.mock('../services/maintenance', () => ({
   loadGarageMaintenanceSummary: api.summary,
 }))
+vi.mock('../services/shopReminders', () => ({
+  listShopMaintenanceReminders: async () => [],
+  setShopMaintenanceReminderState: vi.fn(),
+}))
 const vehicles = [{ id: 'fictional', mileage: 10000 }] as Vehicle[]
 beforeEach(() => {
   vi.resetAllMocks()
